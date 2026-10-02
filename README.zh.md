@@ -57,6 +57,9 @@ python -m pip install --user pipx     # 其他系统，包括 Windows
 pipx ensurepath                       # 把 ~/.local/bin 加入 PATH（之后请打开新的终端）
 ```
 
+> 这里只测试了 Arch / Omarchy 的命令。Debian / Ubuntu、macOS 和 Windows 的命令（以及下面 Windows 上
+> Chromium 的路径）来自 [pipx 官方文档](https://pipx.pypa.io/stable/installation/)，没有在这里测试过。
+
 **2. 安装 `untis`：**
 
 ```bash

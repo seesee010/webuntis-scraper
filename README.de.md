@@ -60,6 +60,10 @@ python -m pip install --user pipx     # alles andere, auch Windows
 pipx ensurepath                       # nimmt ~/.local/bin in den PATH auf (danach neues Terminal öffnen)
 ```
 
+> Getestet wurden hier nur die Befehle für Arch / Omarchy. Die Befehle für Debian / Ubuntu,
+> macOS und Windows (und der Windows-Pfad für Chromium weiter unten) stammen aus der
+> [offiziellen pipx-Dokumentation](https://pipx.pypa.io/stable/installation/) und wurden hier nicht getestet.
+
 **2. `untis` installieren:**
 
 ```bash
