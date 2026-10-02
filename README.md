@@ -4,31 +4,24 @@ Playwright-basierter Scraper für WebUntis. Lädt Stundenplan, Prüfungen /
 Klausuren, Hausaufgaben, Absenzen und Nachrichten und speichert sie als
 strukturiertes JSON.
 
-## Warum Playwright *und* direkt HTTP?
+## Wie es funktioniert
 
-WebUntis hat zwei relevante APIs:
+Vor dem JSON-RPC-Endpoint sitzt eine WAF, die Requests ohne echten
+Browser-Kontext blockt. Deshalb läuft **alles** über Playwright:
 
-- **JSON-RPC** unter `/WebUntis/jsonrpc.do` (klassisch, gut dokumentiert,
-  z.B. `getOwnTimetableForWeek`, `getExamsForRange`, `getHomeWorkForRange`).
-- **REST v1** unter `/WebUntis/api/rest/view/v1/...` (das neuere
-  UI2020-Backend mit `/timetable/entries`, `/app/data`).
+1. **Login** über das echte Login-Formular (nur nötig, wenn keine gültige
+   Session in `sessions/storage_state.json` liegt).
+2. **Session-Check**: `GET /WebUntis/api/token/new` liefert nur bei
+   eingeloggter Session ein JWT. Daraus kommen `person_id` und Rolle.
+3. **Alle API-Calls** laufen per `page.evaluate(fetch(...))` im Browser:
+   - Stundenplan: REST v1 `/api/rest/view/v1/timetable/entries`
+     (braucht das JWT als Bearer), Fallback JSON-RPC `getTimetable`
+   - Prüfungen: `/api/exams`
+   - Hausaufgaben: `/api/homeworks/lessons`
+   - Abwesenheiten: `/api/classreg/absences/students`
+   - Nachrichten: REST v1 `/api/rest/view/v1/messages`
 
-Beide erfordern einen gültigen Session-Cookie. Statt die komplexe
-**React-SPA** von UI2020 mit Form-Selectors anzufassen (race-conditions
-mit der JS-Hydration, instabile Selektoren), machen wir den Login
-direkt gegen den JSON-RPC-`authenticate`-Endpoint. Das ist schnell,
-zuverlässig und unabhängig vom gerenderten DOM.
-
-Playwright wird nur kurz benutzt um die `school`-Cookies zu bootstrappen
-(JSESSIONID etc.), die der Server bei einem GET auf die Login-URL setzt.
-Diese Cookies + Username/Passwort gehen dann in den
-`authenticate`-RPC → Session-ID. Alle weiteren Calls laufen über `httpx`.
-
-Falls deine Schule SSO/2FA/Captcha vorschaltet, fällt der Scraper
-automatisch auf den Form-Login zurück (Playwright klickt sich durch).
-`--form-login` erzwingt diesen Pfad dauerhaft.
-
-Bonus: `playwright-stealth` patcht typische Bot-Detection-Vektoren
+`playwright-stealth` patcht typische Bot-Detection-Vektoren
 (`navigator.webdriver`, `navigator.plugins`, `navigator.languages`, …).
 
 ## Installation
@@ -66,10 +59,10 @@ playwright install chromium
 ## Nutzung
 
 ```powershell
-# Standard-Lauf (JSON-RPC-Login, headless, Session wiederverwendet)
+# Standard-Lauf (headless, gespeicherte Session wird wiederverwendet)
 python -m src
 
-# Erzwinge Form-Login (z.B. bei 2FA / SSO)
+# Gespeicherte Session ignorieren und neu einloggen
 python -m src --form-login --no-headless --clear-session
 
 # Anderes Zeitfenster
@@ -85,8 +78,8 @@ Folge-Läufe kein erneutes Login brauchen.
 
 ### Login-Fehler?
 
-Falls du eine Fehlermeldung wie `Authenticate failed: Invalid username
-or password (code=-1)` bekommst, obwohl die Credentials stimmen, prüfe:
+Falls der Login fehlschlägt (`Form login did not redirect away from the
+login page`), obwohl die Credentials stimmen, prüfe:
 
 1. **Server + Slug korrekt?** Auf `webuntis.com` deine Schule suchen -
    die Redirect-URL lautet `https://<server>.webuntis.com/WebUntis/?school=<slug>`.
@@ -94,7 +87,8 @@ or password (code=-1)` bekommst, obwohl die Credentials stimmen, prüfe:
    aber führende Whitespaces werden getrimmt. Test mit `python -c "import
    os; print(repr(os.environ['UNTIS_PASSWORD']))"`.
 3. **CAPTCHA / SSO / 2FA?** → `python -m src --form-login --no-headless`
-4. **Verbose-Output:** `python -m src -v` zeigt den HTTP-Verkehr.
+4. **Screenshot:** `logs/login_failed.png` zeigt, was der Browser sah.
+5. **Verbose-Output:** `python -m src -v`.
 
 ## Output-Schema
 
@@ -111,17 +105,19 @@ or password (code=-1)` bekommst, obwohl die Credentials stimmen, prüfe:
       {"date": "2026-06-02", "entries": [
         {
           "start": "2026-06-02T08:00", "end": "2026-06-02T08:45",
-          "status": "REGULAR", "is_cancelled": false, "is_exam": false,
+          "status": "REGULAR" | "CHANGED" | "CANCELLED" | ...,
+          "is_cancelled": false, "is_exam": false, "is_substitution": false,
           "lesson_text": "", "subjects": [{"short":"M","long":"Math"}],
-          "teachers": [...], "rooms": [...]
+          "teachers": [{"short":"NEU","long":"...","status":"ADDED","replaces":"ALT"}],
+          "classes": [...], "rooms": [...]
         }
       ]}
     ],
     "lessons": [...]   // bei jsonrpc-Fallback
   },
   "exams": {
-    "source": "jsonrpc" | "timetable_fallback",
-    "exams": [ { "id": 123, "date": "2026-06-10", "name": "Klausur", ... } ]
+    "source": "api" | "timetable_fallback",
+    "exams": [ { "date": "2026-06-10", "start_time": "10:45", "name": "Test", ... } ]
   },
   "homework":  { "items": [...] },
   "absences":  { "items": [...] },
@@ -134,12 +130,11 @@ or password (code=-1)` bekommst, obwohl die Credentials stimmen, prüfe:
 - **2FA / Captcha**: Falls deine Schule OTP verlangt, einmalig mit
   `--no-headless --clear-session` laufen lassen, Code eintippen, dann
   ab sofort headless.
-- **Prüfungen**: Der Endpoint `getExams` ist nur für Admins/Lehrer
-  verfügbar. Für Schüler leiten wir Klausuren aus dem Stundenplan ab
-  (`actType` enthält "Klausur") - siehe `timetable_fallback` in der
-  Output-Source.
-- **Rate-Limit**: Wir senden höchstens eine Anfrage alle 400 ms.
-  Verzögern mit `--days-forward` reizen ist kein Problem.
+- **Prüfungen**: kommen aus `/api/exams`. Falls der Endpoint nicht
+  verfügbar ist, werden Prüfungen aus dem Stundenplan abgeleitet
+  (`source: "timetable_fallback"`).
+- **Rate-Limit**: Wir senden höchstens eine Anfrage alle 300 ms.
+- **Rohdaten**: ohne `--keep-raw` werden alle `raw`-Felder entfernt.
 - **Speicherort**: `sessions/` und `out/` sind in `.gitignore`.
 
 ## Projektstruktur
@@ -150,7 +145,7 @@ src/
   main.py           # CLI
   config.py         # config.json + .env laden
   browser.py        # Playwright + stealth
-  untis_client.py   # Login + JSON-RPC + REST v1
+  untis_client.py   # Login + Session-Check + API-Calls im Browser
   normalize.py      # Rohdaten -> saubere Dicts
   scraper.py        # Orchestrierung
   exporter.py       # JSON-Ausgabe
