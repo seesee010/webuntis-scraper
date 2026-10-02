@@ -14,6 +14,7 @@ from pathlib import Path
 import httpx
 
 from . import __version__, cache, dayinfo
+from . import now as now_mod
 from .browser import BrowserSession
 from .config import (
     CACHE_PATH,
@@ -52,7 +53,8 @@ def _setup_logging(verbose: bool, quiet: bool = False) -> None:
 # Options that pick the date window. An explicit one replaces all of them
 # from default_args (instead of clashing with e.g. a default --today).
 WINDOW_DESTS = ("today", "tomorrow", "next", "week", "next_week", "date",
-                "from_", "to", "days_back", "days_forward", "start_q", "end_q", "free_q")
+                "from_", "to", "days_back", "days_forward", "start_q", "end_q", "free_q",
+                "now")
 # These make no sense as defaults (they decide where defaults come from,
 # or print something and exit).
 NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version")
@@ -180,8 +182,19 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
             help=f"{what} on DAY? Cancelled/removed lessons don't count.",
         )
     ap.add_argument(
-        "--format", choices=("text", "json"), **dflt("text"),
-        help="Answer format for --start/--end/--free.",
+        "--format", choices=("text", "json", "waybar"), **dflt("text"),
+        help="Answer format for --start/--end/--free and --now; 'waybar' "
+             "(only with --now) prints a Waybar custom-module JSON.",
+    )
+    ap.add_argument(
+        "--now", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Show the current and the next lesson (the next school day's first "
+             "lesson after school). Use --max-age for status bars.",
+    )
+    ap.add_argument(
+        "--idle-empty", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="With --now: print nothing (Waybar: empty text) when no lesson is "
+             "running, so a status bar module hides.",
     )
     ap.add_argument(
         "-t", "--tests", "--exams", dest="tests", action=argparse.BooleanOptionalAction,
@@ -300,6 +313,12 @@ def _parse_args(
         ap.error("--tests/--homework can't be combined with --start/--end/--free, "
                  "--oneline or --table")
     args.window_given = bool(shortcut or from_to or days)
+    if args.now and (args.window_given or args.query or args.tests or args.homework
+                     or args.oneline or args.table):
+        ap.error("--now can't be combined with date options, questions, --tests, "
+                 "--homework, --oneline or --table")
+    if args.format == "waybar" and not args.now:
+        ap.error("--format waybar only works with --now")
     args.window = None
     if from_to:
         try:
@@ -394,6 +413,8 @@ async def _async_main(args: argparse.Namespace) -> int:
     _apply_date_shortcuts(cfg, args, today)
     if args.query:
         return await _answer_question(cfg, args, today, now)
+    if args.now:
+        return await _answer_now(cfg, args, today, now)
     if args.tests or args.homework:
         _only_sections(cfg, args)
 
@@ -471,6 +492,27 @@ async def _answer_question(cfg, args: argparse.Namespace, today: date, now: date
     return EXIT_NO_SCHOOL if info is None else 0
 
 
+async def _answer_now(cfg, args: argparse.Namespace, today: date, now: datetime) -> int:
+    """--now: the current and next lesson in text, json or waybar format."""
+    cfg.start_date = cfg.end_date = None
+    cfg.pick_day = "next"
+    cfg.scrape_exams = cfg.scrape_homework = cfg.scrape_absences = cfg.scrape_messages = False
+    payload, _ = await _get_payload(cfg, args, today, now)
+    timetable = payload.get("timetable") or {}
+    if "error" in timetable:
+        raise WebUntisError(f"timetable: {timetable['error']}")
+    out, data = now_mod.answer(payload, args.format, today, now, idle_empty=args.idle_empty)
+    if args.format == "waybar":
+        print(out)                       # always valid JSON for the bar
+        return 0
+    if not now_mod.has_anything(data):
+        print(out if args.format == "json" else "-")
+        return EXIT_NO_SCHOOL
+    if out:
+        print(out)
+    return 0
+
+
 async def _fetch(cfg, args: argparse.Namespace) -> dict:
     async with BrowserSession(cfg, fresh=args.clear_session) as session:
         client = WebUntisClient(cfg, session)
@@ -528,7 +570,8 @@ def main() -> int:
         print(render_legend(resolve_color(args.color)))
         return 0
     _setup_logging(args.verbose,
-                   quiet=bool(_layout(args) or args.query or args.tests or args.homework))
+                   quiet=bool(_layout(args) or args.query or args.tests or args.homework
+                              or args.now))
     if args.default_args:
         logging.getLogger(__name__).debug(
             "default_args from %s: %s", args.defaults_source, " ".join(args.default_args))
