@@ -8,28 +8,41 @@
 >
 > *This translation was made with AI and may be inaccurate. The English version is authoritative.*
 
-Scraper pour WebUntis basé sur Playwright. Il récupère ton emploi du temps, tes examens,
+Scraper pour WebUntis (en HTTP simple, avec Playwright en secours). Il récupère ton emploi du temps, tes examens,
 tes devoirs, tes absences et tes messages, et les enregistre en JSON structuré.
 
 ## Fonctionnement
 
-Le point d'accès JSON-RPC est protégé par un WAF qui bloque les requêtes envoyées sans
-véritable contexte de navigateur. C'est pourquoi **tout** passe par Playwright :
+Par défaut (`--transport auto`), aucun navigateur n'est nécessaire :
 
-1. **Connexion** via le vrai formulaire de connexion (seulement nécessaire s'il n'y a
-   pas de session valide dans `sessions/storage_state.json`).
+1. **Connexion** en envoyant le formulaire de connexion de WebUntis en HTTP simple
+   (`/WebUntis/j_spring_security_check`), seulement quand la session enregistrée dans
+   `sessions/storage_state.json` a expiré. WebUntis termine les sessions inactives après un
+   moment (environ 40 min observées), donc cela arrive souvent.
 2. **Vérification de la session** : `GET /WebUntis/api/token/new` ne renvoie un JWT que
    pour une session connectée. Il fournit le `person_id` et le rôle.
-3. **Tous les appels à l'API** sont exécutés dans le navigateur via
-   `page.evaluate(fetch(...))` :
-   - Emploi du temps : REST v1 `/api/rest/view/v1/timetable/entries`
-     (nécessite le JWT comme jeton Bearer), repli sur JSON-RPC `getTimetable`
+3. **Appels à l'API** avec le cookie de session (et le JWT comme jeton Bearer pour
+   REST v1) :
+   - Emploi du temps : REST v1 `/api/rest/view/v1/timetable/entries`,
+     repli sur JSON-RPC `getTimetable`
    - Examens : `/api/exams`
    - Devoirs : `/api/homeworks/lessons`
    - Absences : `/api/classreg/absences/students`
    - Messages : REST v1 `/api/rest/view/v1/messages`
 
-`playwright-stealth` masque les indices courants de détection de bots
+Si la connexion HTTP reçoit une réponse inattendue (par exemple un blocage du WAF, une 2FA
+ou un SSO), `untis` passe à un vrai **Chromium via Playwright** : il remplit le formulaire
+de connexion et exécute les appels à l'API dans la page. Des identifiants incorrects ne
+sont *pas* réessayés dans le navigateur (ce ne serait qu'un deuxième échec de connexion).
+Les deux modes partagent le même fichier de session.
+
+| `--transport` | Comportement |
+|---|---|
+| `auto` (par défaut) | HTTP, navigateur seulement en secours |
+| `http` | HTTP uniquement, ne lance jamais de navigateur |
+| `browser` | toujours Playwright (aussi avec `--no-headless`) |
+
+En mode navigateur, `playwright-stealth` masque les indices courants de détection de bots
 (`navigator.webdriver`, `navigator.plugins`, `navigator.languages`, …).
 
 ## Installation
@@ -168,7 +181,7 @@ que tes identifiants sont corrects, vérifie :
    l'URL de redirection est `https://<server>.webuntis.com/WebUntis/?school=<slug>`.
 2. **Caractères spéciaux dans le mot de passe ?** `.env` accepte `=` et les guillemets,
    mais les espaces au début sont supprimés.
-3. **CAPTCHA / SSO / 2FA ?** → `python -m src --form-login --no-headless`
+3. **CAPTCHA / SSO / 2FA ?** → `untis --transport browser --no-headless --form-login`
 4. **Capture d'écran :** `logs/login_failed.png` (dans le dossier de données) montre ce
    que le navigateur a vu.
 5. **Sortie détaillée :** `python -m src -v`.
@@ -246,7 +259,8 @@ src/
   main.py           # ligne de commande
   config.py         # charge config.json + .env
   browser.py        # Playwright + stealth
-  untis_client.py   # connexion + vérification de session + appels API dans le navigateur
+  http_transport.py # connexion + requêtes en HTTP simple (par défaut)
+  untis_client.py   # connexion (HTTP ou navigateur) + vérification de session + appels API
   normalize.py      # données brutes -> dictionnaires propres
   scraper.py        # orchestration
   exporter.py       # sortie JSON
