@@ -218,6 +218,10 @@ untis --short                   # ou -s
 untis -s --days-forward 0       # seulement aujourd'hui
 untis --oneline --week          # une ligne par jour
 untis --table --week            # grille de la semaine : jours en colonnes, heures en lignes
+untis --start tomorrow           # premier cours qui a lieu demain, par ex. 07:50
+untis --end                      # fin des cours aujourd'hui
+untis --free next                # heures libres au prochain jour de cours
+untis --start tomorrow || echo "sleep in"   # code de sortie 5 = pas de cours ce jour-là
 ```
 
 `--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
@@ -268,6 +272,8 @@ Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
 Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 ```
 
+`--start`, `--end` et `--free` répondent à une question sur un jour et n'affichent que la réponse : `today` (par défaut), `tomorrow`, `next` (le prochain jour de cours), une date ou un jour de la semaine (le prochain). Les cours annulés et ceux dont ta classe a été retirée ne comptent pas ; un premier cours annulé décale donc `--start`. Les heures libres viennent de la grille horaire de l'école. S'il n'y a pas cours ce jour-là, `-` est affiché et le code de sortie est 5. `--format json` affiche `{"date", "start", "end", "first", "free"}`. Seul l'emploi du temps est chargé, et aucun fichier JSON n'est écrit.
+
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y
 sont enregistrés dans `sessions/storage_state.json`, pour que les exécutions suivantes
@@ -299,6 +305,7 @@ ajoute `-v` pour voir la trace complète.
 | `2` | problème de configuration / d'installation (config manquante, Chromium non installé) |
 | `3` | échec de la connexion |
 | `4` | WebUntis injoignable ou a renvoyé une erreur |
+| `5` | `--start` / `--end` / `--free` : pas de cours ce jour-là (affiche `-`) |
 | `130` | interrompu avec Ctrl-C |
 
 ## Format de sortie

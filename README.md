@@ -213,6 +213,10 @@ untis --short                   # or -s
 untis -s --days-forward 0       # today only
 untis --oneline --week          # one line per day
 untis --table --week            # week grid: days as columns, periods as rows
+untis --start tomorrow           # first lesson that takes place tomorrow, e.g. 07:50
+untis --end                      # when school ends today
+untis --free next                # free periods on the next school day
+untis --start tomorrow || echo "sleep in"   # exit code 5 = no school that day
 ```
 
 `--from` / `--to` accept everything `--date` does, plus `today`, `tomorrow` and weekday names in English or German (`mon`, `monday`, `mo`, `montag`, …). A weekday means this week's; if `--to` would end up before `--from`, it means next week's.
@@ -263,6 +267,8 @@ Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
 Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 ```
 
+`--start`, `--end` and `--free` answer one question about a day and print only the answer: `today` (the default), `tomorrow`, `next` (the next school day), a date, or a weekday (the next one). Cancelled lessons and lessons your class was removed from don't count, so a cancelled first period moves `--start` later. Free periods come from the school's time grid. With no school that day they print `-` and exit with code 5. `--format json` prints `{"date", "start", "end", "first", "free"}`. Only the timetable is fetched, and no JSON files are written.
+
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
 inside the data directory (`~/.local/share/untis/`, or the project
 folder). Cookies are stored in `sessions/storage_state.json` there, so
@@ -294,6 +300,7 @@ add `-v` for the full traceback.
 | `2` | config / setup problem (missing config, Chromium not installed) |
 | `3` | login failed |
 | `4` | WebUntis unreachable or returned an error |
+| `5` | `--start` / `--end` / `--free`: no school that day (prints `-`) |
 | `130` | aborted with Ctrl-C |
 
 ## Output schema

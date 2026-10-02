@@ -13,7 +13,7 @@ from pathlib import Path
 
 import httpx
 
-from . import __version__, cache
+from . import __version__, cache, dayinfo
 from .browser import BrowserSession
 from .config import (
     CACHE_PATH,
@@ -30,6 +30,7 @@ EXIT_ERROR = 1      # unexpected error (bug)
 EXIT_CONFIG = 2     # missing/invalid config or setup (e.g. no Chromium)
 EXIT_LOGIN = 3      # could not log in
 EXIT_NETWORK = 4    # WebUntis unreachable or returned an error
+EXIT_NO_SCHOOL = 5  # --start/--end/--free: no lessons that day
 EXIT_ABORTED = 130  # Ctrl-C
 
 
@@ -49,7 +50,7 @@ def _setup_logging(verbose: bool, quiet: bool = False) -> None:
 # Options that pick the date window. An explicit one replaces all of them
 # from default_args (instead of clashing with e.g. a default --today).
 WINDOW_DESTS = ("today", "tomorrow", "next", "week", "next_week", "date",
-                "from_", "to", "days_back", "days_forward")
+                "from_", "to", "days_back", "days_forward", "start_q", "end_q", "free_q")
 # These make no sense as defaults (they decide where defaults come from,
 # or print something and exit).
 NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version")
@@ -79,6 +80,7 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
                     "messages in the terminal (plain HTTP, Playwright as a fallback).",
         epilog=f"exit codes: {EXIT_ERROR} unexpected error, {EXIT_CONFIG} config/setup, "
                f"{EXIT_LOGIN} login failed, {EXIT_NETWORK} network/WebUntis error, "
+               f"{EXIT_NO_SCHOOL} no school that day (--start/--end/--free), "
                f"{EXIT_ABORTED} aborted. Default arguments can be set as "
                f"\"default_args\" in config.json (e.g. [\"--short\"]) or in "
                f"UNTIS_DEFAULT_ARGS; explicit options win, flags can be turned "
@@ -162,6 +164,22 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
     ap.add_argument(
         "-s", "--short", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print a compact per-day overview (JSON is still written).",
+    )
+    ask = ap.add_argument_group(
+        "questions", "Answer one question about a day (DAY: today (default), "
+                     "tomorrow, next, a date or a weekday) and print only that.",
+    ).add_mutually_exclusive_group()
+    for flag, what in (("--start", "When does school start"),
+                       ("--end", "When does school end"),
+                       ("--free", "Free periods between lessons")):
+        ask.add_argument(
+            flag, dest=f"{flag[2:]}_q", nargs="?", const="today", type=_query_day_arg,
+            metavar="DAY", **dflt(None),
+            help=f"{what} on DAY? Cancelled/removed lessons don't count.",
+        )
+    ap.add_argument(
+        "--format", choices=("text", "json"), **dflt("text"),
+        help="Answer format for --start/--end/--free.",
     )
     ap.add_argument(
         "--oneline", action=argparse.BooleanOptionalAction, **dflt(False),
@@ -261,6 +279,10 @@ def _parse_args(
         ap.error("--from/--to can't be combined with other date shortcuts")
     if args.oneline and args.table:
         ap.error("--oneline and --table can't be combined")
+    args.query = next(((what, getattr(args, f"{what}_q")) for what in ("start", "end", "free")
+                       if getattr(args, f"{what}_q") is not None), None)
+    if args.query and (shortcut or from_to or days):
+        ap.error("--start/--end/--free can't be combined with other date options")
     args.window = None
     if from_to:
         try:
@@ -294,6 +316,15 @@ def _duration_arg(text: str) -> int:
         return cache.parse_duration(text)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def _query_day_arg(text: str) -> str:
+    """argparse type for --start/--end/--free DAY (syntax check only)."""
+    try:
+        dayinfo.query_day(text, date.today())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+    return text
 
 
 def _day_spec_arg(text: str) -> str:
@@ -344,15 +375,13 @@ async def _async_main(args: argparse.Namespace) -> int:
         cfg.calendar_days = True
     today, now = date.today(), datetime.now()
     _apply_date_shortcuts(cfg, args, today)
+    if args.query:
+        return await _answer_question(cfg, args, today, now)
 
-    payload = None
-    if args.offline or args.max_age is not None:
-        payload = _from_cache(cfg, args, today, now)
-    if payload is None:
-        payload = await _fetch(cfg, args)
+    payload, fetched = await _get_payload(cfg, args, today, now)
+    if fetched:
         write_json(payload, cfg.output_dir, pretty=cfg.pretty_json, keep_raw=cfg.include_raw)
         write_latest(payload, cfg.output_dir, keep_raw=cfg.include_raw)
-        cache.save(CACHE_PATH, payload, cfg, datetime.now())
     color = resolve_color(args.color)
     layout = _layout(args)
     if layout:
@@ -360,6 +389,45 @@ async def _async_main(args: argparse.Namespace) -> int:
     if args.legend:
         print(("\n" if layout else "") + render_legend(color))
     return 0
+
+
+async def _get_payload(cfg, args: argparse.Namespace, today: date, now: datetime) -> tuple[dict, bool]:
+    """(payload, fetched): from the cache if allowed and possible, else
+    fetched (and then saved to the cache)."""
+    if args.offline or args.max_age is not None:
+        payload = _from_cache(cfg, args, today, now)
+        if payload is not None:
+            return payload, False
+    payload = await _fetch(cfg, args)
+    cache.save(CACHE_PATH, payload, cfg, datetime.now())
+    return payload, True
+
+
+async def _answer_question(cfg, args: argparse.Namespace, today: date, now: datetime) -> int:
+    """--start/--end/--free: print only the answer (no JSON files written)."""
+    what, spec = args.query
+    day = dayinfo.query_day(spec, today)
+    cfg.start_date = cfg.end_date = cfg.pick_day = None
+    if day == "next":
+        cfg.pick_day = "next"
+    else:
+        cfg.start_date = cfg.end_date = day
+    cfg.scrape_exams = cfg.scrape_homework = cfg.scrape_absences = cfg.scrape_messages = False
+    payload, _ = await _get_payload(cfg, args, today, now)
+    timetable = payload.get("timetable") or {}
+    if "error" in timetable:
+        raise WebUntisError(f"timetable: {timetable['error']}")
+    target = date.fromisoformat(((payload.get("meta") or {}).get("window") or {}).get("start")
+                                or today.isoformat())
+    info = dayinfo.day_info(timetable, target)
+    if args.format == "json":
+        print(json.dumps(info or {"date": target.isoformat(), "start": None, "end": None,
+                                  "first": None, "free": []}, ensure_ascii=False))
+    else:
+        answer = dayinfo.format_answer(info, what)
+        if answer:
+            print(answer)
+    return EXIT_NO_SCHOOL if info is None else 0
 
 
 async def _fetch(cfg, args: argparse.Namespace) -> dict:
@@ -418,7 +486,7 @@ def main() -> int:
         # Only the legend: no login, no network.
         print(render_legend(resolve_color(args.color)))
         return 0
-    _setup_logging(args.verbose, quiet=bool(_layout(args)))
+    _setup_logging(args.verbose, quiet=bool(_layout(args) or args.query))
     if args.default_args:
         logging.getLogger(__name__).debug(
             "default_args from %s: %s", args.defaults_source, " ".join(args.default_args))

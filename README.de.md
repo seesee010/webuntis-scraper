@@ -216,6 +216,10 @@ untis --short                   # oder -s
 untis -s --days-forward 0       # nur heute
 untis --oneline --week          # eine Zeile pro Tag
 untis --table --week            # Wochenraster: Tage als Spalten, Stunden als Zeilen
+untis --start tomorrow           # erste Stunde morgen, die stattfindet, z.B. 07:50
+untis --end                      # wann die Schule heute aus ist
+untis --free next                # Freistunden am nächsten Schultag
+untis --start tomorrow || echo "sleep in"   # Exit-Code 5 = an dem Tag keine Schule
 ```
 
 `--from` / `--to` verstehen alles, was `--date` versteht, dazu `today`/`heute`, `tomorrow`/`morgen` und Wochentage auf Englisch oder Deutsch (`mon`, `monday`, `mo`, `montag`, …). Ein Wochentag meint den dieser Woche; läge `--to` dadurch vor `--from`, den der nächsten Woche.
@@ -266,6 +270,8 @@ Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
 Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 ```
 
+`--start`, `--end` und `--free` beantworten eine Frage zu einem Tag und geben nur die Antwort aus: `today` (Standard), `tomorrow`, `next` (der nächste Schultag), ein Datum oder ein Wochentag (der nächste). Entfallene Stunden und Stunden, aus denen deine Klasse ausgetragen ist, zählen nicht; eine entfallene erste Stunde verschiebt `--start` also nach hinten. Freistunden kommen aus dem Zeitraster der Schule. Ist an dem Tag keine Schule, wird `-` ausgegeben und mit Code 5 beendet. `--format json` gibt `{"date", "start", "end", "first", "free"}` aus. Es wird nur der Stundenplan geladen, und es werden keine JSON-Dateien geschrieben.
+
 Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
 im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In
 `sessions/storage_state.json` werden dort Cookies gespeichert, damit
@@ -297,6 +303,7 @@ mit `-v` gibt es den vollen Traceback.
 | `2` | Config-/Setup-Problem (Config fehlt, Chromium nicht installiert) |
 | `3` | Login fehlgeschlagen |
 | `4` | WebUntis nicht erreichbar oder Fehler vom Server |
+| `5` | `--start` / `--end` / `--free`: an dem Tag keine Schule (gibt `-` aus) |
 | `130` | mit Strg-C abgebrochen |
 
 ## Output-Schema

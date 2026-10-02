@@ -209,6 +209,10 @@ untis --short                   # 或 -s
 untis -s --days-forward 0       # 只看今天
 untis --oneline --week          # 每天一行
 untis --table --week            # 周课表：日期为列，课时为行
+untis --start tomorrow           # 明天第一节真正上的课，例如 07:50
+untis --end                      # 今天什么时候放学
+untis --free next                # 下一个上课日的空闲课时
+untis --start tomorrow || echo "sleep in"   # 退出码 5 = 那天没有课
 ```
 
 `--from` / `--to` 支持 `--date` 的所有格式，另外还支持 `today`、`tomorrow` 以及英文或德文的星期名称（`mon`、`monday`、`mo`、`montag` 等）。星期名称指本周的那一天；如果这样 `--to` 会早于 `--from`，则指下周的那一天。
@@ -254,6 +258,8 @@ Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
 Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 ```
 
+`--start`、`--end` 和 `--free` 回答关于某一天的一个问题，只输出答案：`today`（默认）、`tomorrow`、`next`（下一个上课日）、日期或星期名称（下一个该星期日）。取消的课和你的班级被移出的课不计算在内，所以第一节课取消时 `--start` 会往后推。空闲课时来自学校的课时表。如果那天没有课，会输出 `-` 并以代码 5 退出。`--format json` 会输出 `{"date", "start", "end", "first", "free"}`。只会获取课表，不会写入 JSON 文件。
+
 输出保存在数据目录（`~/.local/share/untis/` 或项目文件夹）中的 `out/untis_<timestamp>.json` 和
 `out/latest.json`。Cookie 保存在那里的 `sessions/storage_state.json` 中，这样以后运行时不需要
 重新登录。
@@ -281,6 +287,7 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 | `2` | 配置 / 安装问题（缺少配置，或没有安装 Chromium） |
 | `3` | 登录失败 |
 | `4` | 无法连接 WebUntis，或 WebUntis 返回了错误 |
+| `5` | `--start` / `--end` / `--free`：那天没有课（输出 `-`） |
 | `130` | 用 Ctrl-C 中止 |
 
 ## 输出格式
