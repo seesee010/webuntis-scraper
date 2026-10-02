@@ -15,8 +15,8 @@ WebUntis 抓取工具（使用普通 HTTP，必要时用 Playwright 作为备用
 默认情况下（`--transport auto`）不需要浏览器：
 
 1. **登录**：通过普通 HTTP 提交 WebUntis 的登录表单（`/WebUntis/j_spring_security_check`），
-   只有当 `sessions/storage_state.json` 中保存的会话过期时才需要。WebUntis 会在一段时间不活动后
-   结束会话（观察到大约 40 分钟），所以经常需要重新登录。
+   只有当 `sessions/storage_state.json` 中保存的会话过期时才需要。WebUntis 会在 15 分钟不活动后
+   结束会话，所以经常需要重新登录。
 2. **检查会话**：只有已登录的会话，`GET /WebUntis/api/token/new` 才会返回 JWT。它包含
    `person_id` 和角色。
 3. **API 请求**使用会话 Cookie（REST v1 还需要把 JWT 作为 Bearer 令牌）：
@@ -111,11 +111,11 @@ pip install -e ".[dev]"
 playwright install chromium
 ```
 
-`bin/untis` 会用源码目录中的 `.venv` 运行程序，不需要安装。把它链接到 `PATH` 中的某个目录
-（大多数 Linux 发行版的 `PATH` 都包含 `~/.local/bin`）：
+`pip install -e` 还会创建命令 `.venv/bin/untis`，它总是运行这个源码目录中的代码。把它链接到 `PATH`
+中的某个目录（大多数 Linux 发行版的 `PATH` 都包含 `~/.local/bin`）：
 
 ```bash
-ln -s "$PWD/bin/untis" ~/.local/bin/untis
+ln -s "$PWD/.venv/bin/untis" ~/.local/bin/untis
 untis -s --today
 ```
 
@@ -401,8 +401,6 @@ rm ~/.local/share/untis/sessions/storage_state.json       # 手动执行同样�
 ```
 pyproject.toml      # 包信息、依赖、`untis` 命令
 contrib/systemd/    # 用于 --changes --notify 的用户定时器
-bin/
-  untis             # 源码目录的启动脚本
 src/untis/
   __init__.py       # 版本
   __main__.py       # python -m untis

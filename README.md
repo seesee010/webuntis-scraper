@@ -14,7 +14,7 @@ By default (`--transport auto`) no browser is needed:
 1. **Login** by posting the WebUntis login form over plain HTTP
    (`/WebUntis/j_spring_security_check`), only when the saved session
    in `sessions/storage_state.json` has expired. WebUntis ends idle
-   sessions after a while (~40 min observed), so this happens often.
+   sessions after 15 minutes of inactivity, so this happens often.
 2. **Session check**: `GET /WebUntis/api/token/new` only returns a JWT
    for a logged-in session. It provides the `person_id` and role.
 3. **API calls** with the session cookie (and the JWT as Bearer token
@@ -113,11 +113,12 @@ pip install -e ".[dev]"
 playwright install chromium
 ```
 
-`bin/untis` runs the checkout with its `.venv` without installing anything. Link it
-into a directory on your `PATH` (`~/.local/bin` is on the `PATH` of most Linux distros):
+`pip install -e` also creates the command `.venv/bin/untis`, which always runs the code of this
+checkout. Link it into a directory on your `PATH` (`~/.local/bin` is on the `PATH` of most Linux
+distros):
 
 ```bash
-ln -s "$PWD/bin/untis" ~/.local/bin/untis
+ln -s "$PWD/.venv/bin/untis" ~/.local/bin/untis
 untis -s --today
 ```
 
@@ -415,8 +416,6 @@ rm ~/.local/share/untis/sessions/storage_state.json       # the same, by hand
 ```
 pyproject.toml      # package metadata, dependencies, `untis` command
 contrib/systemd/    # user timer for --changes --notify
-bin/
-  untis             # launcher for a dev checkout
 src/untis/
   __init__.py       # version
   __main__.py       # python -m untis
