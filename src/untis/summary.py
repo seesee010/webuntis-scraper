@@ -193,6 +193,12 @@ def _live_state(day_iso: str, rows: list[dict], now: Optional[datetime]) -> Opti
     return state
 
 
+def _cache_age(cached_at: str, now: datetime) -> str:
+    """"cached, 14 min old" for data answered from the cache."""
+    minutes = int((now - datetime.fromisoformat(cached_at)).total_seconds() // 60)
+    return "cached, just now" if minutes < 1 else f"cached, {_fmt_minutes(minutes)} old"
+
+
 def _day_header(day_iso: str, rows: list[dict], note: str, st: _Style) -> str:
     """"Mon 05.10.  07:50–13:25" – span of what actually takes place."""
     header = st.bold(_fmt_day(day_iso))
@@ -341,9 +347,12 @@ def render_summary(
     now = now or datetime.now()
     meta = payload.get("meta") or {}
     window = meta.get("window") or {}
-    lines = [st.bold(f"{meta.get('user') or ''}") + st.dim(
+    header = st.bold(f"{meta.get('user') or ''}") + st.dim(
         f" · {meta.get('school') or ''} · {window.get('start', '')} → {window.get('end', '')}"
-    )]
+    )
+    if meta.get("cached_at"):
+        header += "  " + st.yellow(f"({_cache_age(meta['cached_at'], now)})")
+    lines = [header]
 
     for name, render in (("timetable", _render_timetable),
                          ("exams", _render_exams),

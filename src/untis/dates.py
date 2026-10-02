@@ -193,3 +193,22 @@ def resolve_from_to(
         if end < start:
             raise ValueError(f"--to ({end:%d.%m.%Y}) is before --from ({start:%d.%m.%Y})")
     return start, end
+
+
+def school_day_window(
+    timetable: dict[str, Any], today: date, back: int, fwd: int, lo: date, hi: date,
+) -> tuple[date, date, str]:
+    """Today plus the next `fwd` / previous `back` school days, taken
+    from a timetable that covers lo..hi. Returns (start, end, note); the
+    note says when the timetable didn't contain enough school days."""
+    days = school_days(timetable)
+    after = [d for d in days if d > today]
+    before = [d for d in days if d < today]
+    notes = []
+    if fwd and len(after) < fwd:
+        notes.append(f"only {len(after)} school days in the next {(hi - today).days} days")
+    if back and len(before) < back:
+        notes.append(f"only {len(before)} school days in the last {(today - lo).days} days")
+    end = after[fwd - 1] if fwd and len(after) >= fwd else (hi if fwd else today)
+    start = before[-back] if back and len(before) >= back else (lo if back else today)
+    return start, end, "; ".join(notes)

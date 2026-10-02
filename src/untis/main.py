@@ -8,14 +8,15 @@ import logging
 import os
 import shlex
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import httpx
 
-from . import __version__
+from . import __version__, cache
 from .browser import BrowserSession
 from .config import (
+    CACHE_PATH,
     DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, ConfigError, load_config,
 )
 from .dates import parse_date, parse_day_spec, resolve_from_to, week_range
@@ -162,6 +163,15 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         "-s", "--short", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print a compact per-day overview (JSON is still written).",
     )
+    ap.add_argument(
+        "--offline", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Never fetch: answer from the data cached by the last run.",
+    )
+    ap.add_argument(
+        "--max-age", type=_duration_arg, **dflt(None), metavar="DURATION",
+        help="Use the cached data if it's younger than this (e.g. 90s, 10m, 2h) "
+             "and covers the request; otherwise fetch.",
+    )
     ap.add_argument("-v", "--verbose", action=argparse.BooleanOptionalAction, **dflt(False),
                     help="Debug logging.")
     return ap
@@ -250,6 +260,13 @@ def _non_negative_int(text: str) -> int:
     return value
 
 
+def _duration_arg(text: str) -> int:
+    try:
+        return cache.parse_duration(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
 def _day_spec_arg(text: str) -> str:
     """argparse type for --from/--to: validate the syntax early (the window
     itself is resolved after parsing, when both values are known)."""
@@ -296,36 +313,53 @@ async def _async_main(args: argparse.Namespace) -> int:
         cfg.days_forward = args.days_forward
     if args.calendar_days:
         cfg.calendar_days = True
-    _apply_date_shortcuts(cfg, args, date.today())
+    today, now = date.today(), datetime.now()
+    _apply_date_shortcuts(cfg, args, today)
 
-    async with BrowserSession(cfg, fresh=args.clear_session) as session:
-        client = WebUntisClient(cfg, session)
-        try:
-            await client.login(force=args.form_login)
-            scraper = Scraper(cfg, client)
-            payload = await scraper.run()
-        finally:
-            await client.close()
-
-    write_json(
-        payload,
-        cfg.output_dir,
-        pretty=cfg.pretty_json,
-        keep_raw=cfg.include_raw,
-    )
-    write_latest(
-        payload,
-        cfg.output_dir,
-        keep_raw=cfg.include_raw,
-    )
+    payload = None
+    if args.offline or args.max_age is not None:
+        payload = _from_cache(cfg, args, today, now)
+    if payload is None:
+        payload = await _fetch(cfg, args)
+        write_json(payload, cfg.output_dir, pretty=cfg.pretty_json, keep_raw=cfg.include_raw)
+        write_latest(payload, cfg.output_dir, keep_raw=cfg.include_raw)
+        cache.save(CACHE_PATH, payload, cfg, datetime.now())
     if args.short:
         print(render_summary(payload))
     return 0
 
 
+async def _fetch(cfg, args: argparse.Namespace) -> dict:
+    async with BrowserSession(cfg, fresh=args.clear_session) as session:
+        client = WebUntisClient(cfg, session)
+        try:
+            await client.login(force=args.form_login)
+            return await Scraper(cfg, client).run()
+        finally:
+            await client.close()
+
+
+def _from_cache(cfg, args: argparse.Namespace, today: date, now: datetime) -> dict | None:
+    """The payload from the cache, or None to fetch. With --offline a
+    cache miss is an error instead (nothing may be fetched)."""
+    entry = cache.load(CACHE_PATH)
+    try:
+        if entry is None:
+            raise cache.CacheMiss("no cached data yet; run untis once without --offline")
+        return cache.from_cache(cfg, entry, today, now,
+                                None if args.offline else args.max_age)
+    except cache.CacheMiss as exc:
+        if args.offline:
+            raise
+        logging.getLogger(__name__).info("Not using the cache: %s", exc)
+        return None
+
+
 def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, str]:
     """Map an exception to (exit code, one-line message)."""
     first_line = (str(exc).strip().splitlines() or [""])[0]
+    if isinstance(exc, cache.CacheMiss):
+        return EXIT_NETWORK, f"offline: {exc}"
     if isinstance(exc, ConfigError):
         return EXIT_CONFIG, f"config error: {exc}"
     if isinstance(exc, LoginError):

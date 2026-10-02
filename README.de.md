@@ -205,6 +205,8 @@ untis -s --date 12.10.     # auch 12.10.2026 oder 2026-10-12
 untis -s --from mon --to fri     # diese Schulwoche
 untis -s --from tue --to mon     # Di dieser Woche bis Mo nächster Woche
 untis -s --to fri                # ab heute bis Freitag
+untis -s --offline               # aus den zuletzt geladenen Daten, ohne Netzwerk
+untis -s --max-age 10m           # Cache, wenn jünger als 10 min, sonst laden
 
 # Rohdaten der API zusätzlich behalten
 untis --keep-raw -v
@@ -215,6 +217,8 @@ untis -s --days-forward 0       # nur heute
 ```
 
 `--from` / `--to` verstehen alles, was `--date` versteht, dazu `today`/`heute`, `tomorrow`/`morgen` und Wochentage auf Englisch oder Deutsch (`mon`, `monday`, `mo`, `montag`, …). Ein Wochentag meint den dieser Woche; läge `--to` dadurch vor `--from`, den der nächsten Woche.
+
+Jeder echte Lauf speichert seine Daten in `~/.local/share/untis/cache/last.json` (privat, ohne `raw`). `--offline` antwortet nur von dort und greift nie aufs Netzwerk zu; deckt der Cache die gewünschten Tage nicht ab (oder stammt er von einem anderen Account), sagt es das und beendet sich mit Code 4. `--max-age` nutzt den Cache, wenn er jung genug ist und die Anfrage abdeckt, sonst wird geladen. Antworten aus dem Cache zeigen ihr Alter im Kopf, z.B. `(cached, 14 min old)`, und schreiben keine neuen JSON-Dateien.
 
 `--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum und markiert,
 was mit der Stunde passiert ist:
@@ -329,7 +333,7 @@ mit `-v` gibt es den vollen Traceback.
 
 - **Passwort:** `~/.config/untis/.env`. Nur für dich lesbar machen (`chmod 600`). `untis` warnt, wenn andere Nutzer die Datei lesen können.
 - **Login-Session:** Mit den Cookies in `~/.local/share/untis/sessions/storage_state.json` kann jeder, der die Datei hat, bis zum Ablauf der Session als du auftreten. Die Datei wird mit Rechten `600` in einem `700`-Ordner angelegt.
-- **Output und Debug-Dateien:** `out/` (dein Name, Stundenplan, Abwesenheiten) und `logs/` (Screenshots der WebUntis-Seite) sind ebenfalls privat, Dateien älterer Versionen werden beim nächsten Lauf korrigiert. Screenshots vor dem Teilen prüfen.
+- **Output und Debug-Dateien:** `out/` und `cache/` (dein Name, Stundenplan, Abwesenheiten) und `logs/` (Screenshots der WebUntis-Seite) sind ebenfalls privat, Dateien älterer Versionen werden beim nächsten Lauf korrigiert. Screenshots vor dem Teilen prüfen.
 - **Browser-Sandbox:** Chromium läuft mit eingeschalteter Sandbox. Nur in Docker oder ähnlichen Umgebungen, die es brauchen, `"browser_no_sandbox": true` in `config.json` setzen (als root wird es automatisch aktiviert).
 
 ```bash
