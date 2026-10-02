@@ -227,6 +227,8 @@ untis -t --days-back 30 --days-forward 0   # contrôles des 30 derniers jours de
 untis --homework                 # tous les devoirs de cette année scolaire
 untis -H --days-forward 5        # devoirs à rendre dans les 5 prochains jours de cours
 untis -t -H                      # les deux sections
+untis --now                      # le cours actuel et le suivant
+untis --now --format waybar      # JSON pour un module personnalisé Waybar
 ```
 
 `--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
@@ -282,6 +284,17 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 `--tests` (aussi `-t` / `--exams`) n'affiche que les contrôles et examens, triés par date avec « in N days », la note si WebUntis en a une, et les contrôles passés grisés. Sans période, il couvre tout d'aujourd'hui à la fin de l'année scolaire (le `days_forward` de ta configuration ne s'applique pas ici) ; avec `--days-forward`, `--from`, `--week`, … seulement cette période. Seuls les examens sont chargés.
 
 `--homework` (aussi `-H`) n'affiche que les devoirs : ceux à faire d'abord par date d'échéance (en retard en rouge), puis ceux terminés grisés avec un ✓, chacun avec son texte complet adapté à la largeur du terminal, une remarque et les pièces jointes s'il y en a. Sans période, il couvre toute l'année scolaire ; avec `--days-forward`, `--from`, … seulement les devoirs *à rendre* dans cette période (WebUntis filtre par le cours où ils ont été donnés, donc `untis` regarde plus loin en arrière et filtre lui-même par échéance). Avec `--tests`, les deux sections sont affichées.
+
+`--now` affiche le cours en cours (avec le temps restant) et le suivant ; après les cours ou le week-end, le premier cours du prochain jour de cours. `--format json` affiche la même chose sous forme de données, `--format waybar` le JSON attendu par un module personnalisé [Waybar](https://github.com/Alexays/Waybar) (`text`, `tooltip`, `class`, où `class` est le statut du cours ou `idle`). `--idle-empty` n'affiche rien entre les cours pour que le module se masque. Avec `--max-age`, la barre est alimentée par le cache au lieu d'interroger WebUntis chaque minute :
+
+```jsonc
+// ~/.config/waybar/config.jsonc
+"custom/untis": {
+  "exec": "untis --now --format waybar --max-age 10m --idle-empty",
+  "return-type": "json",
+  "interval": 60
+}
+```
 
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y

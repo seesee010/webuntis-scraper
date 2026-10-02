@@ -222,6 +222,8 @@ untis -t --days-back 30 --days-forward 0   # tests of the last 30 school days (w
 untis --homework                 # all homework of this school year
 untis -H --days-forward 5        # homework due in the next 5 school days
 untis -t -H                      # both sections
+untis --now                      # the current and the next lesson
+untis --now --format waybar      # JSON for a Waybar custom module
 ```
 
 `--from` / `--to` accept everything `--date` does, plus `today`, `tomorrow` and weekday names in English or German (`mon`, `monday`, `mo`, `montag`, …). A weekday means this week's; if `--to` would end up before `--from`, it means next week's.
@@ -277,6 +279,17 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 `--tests` (also `-t` / `--exams`) shows only tests and exams, sorted by date with "in N days", the grade if WebUntis has one, and past tests dimmed. Without a window it covers everything from today until the end of the school year (the `days_forward` from your config doesn't apply here); with `--days-forward`, `--from`, `--week`, … only that window. Only the exams are fetched.
 
 `--homework` (also `-H`) shows only homework: open ones first by due date (overdue ones in red), then completed ones dimmed with a ✓, each with its full text wrapped to the terminal, a note and attachments if there are any. Without a window it covers the whole school year; with `--days-forward`, `--from`, … only homework *due* in that window (WebUntis filters by the lesson it was given in, so `untis` looks further back and filters by due date itself). Together with `--tests` both sections are shown.
+
+`--now` shows the lesson running right now (with the time left) and the next one; after school or on a weekend, the first lesson of the next school day. `--format json` prints the same as data, `--format waybar` the JSON a [Waybar](https://github.com/Alexays/Waybar) custom module expects (`text`, `tooltip`, `class`, where `class` is the lesson's status or `idle`). `--idle-empty` prints nothing between lessons so the module hides. With `--max-age` the bar is fed from the cache instead of hitting WebUntis every minute:
+
+```jsonc
+// ~/.config/waybar/config.jsonc
+"custom/untis": {
+  "exec": "untis --now --format waybar --max-age 10m --idle-empty",
+  "return-type": "json",
+  "interval": 60
+}
+```
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
 inside the data directory (`~/.local/share/untis/`, or the project

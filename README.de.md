@@ -225,6 +225,8 @@ untis -t --days-back 30 --days-forward 0   # Tests der letzten 30 Schultage (mit
 untis --homework                 # alle Hausaufgaben dieses Schuljahrs
 untis -H --days-forward 5        # Hausaufgaben, die in den nächsten 5 Schultagen fällig sind
 untis -t -H                      # beide Abschnitte
+untis --now                      # die aktuelle und die nächste Stunde
+untis --now --format waybar      # JSON für ein Waybar-Custom-Modul
 ```
 
 `--from` / `--to` verstehen alles, was `--date` versteht, dazu `today`/`heute`, `tomorrow`/`morgen` und Wochentage auf Englisch oder Deutsch (`mon`, `monday`, `mo`, `montag`, …). Ein Wochentag meint den dieser Woche; läge `--to` dadurch vor `--from`, den der nächsten Woche.
@@ -280,6 +282,17 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 `--tests` (auch `-t` / `--exams`) zeigt nur Tests und Prüfungen, sortiert nach Datum mit „in N days“, der Note, falls WebUntis eine hat, und vergangenen Tests abgedunkelt. Ohne Zeitraum reicht es von heute bis zum Ende des Schuljahrs (das `days_forward` aus deiner Config gilt hier nicht); mit `--days-forward`, `--from`, `--week`, … nur dieser Zeitraum. Es werden nur die Prüfungen geladen.
 
 `--homework` (auch `-H`) zeigt nur Hausaufgaben: offene zuerst nach Fälligkeit (überfällige rot), danach erledigte abgedunkelt mit ✓, jeweils mit vollem Text auf die Terminalbreite umgebrochen, dazu Bemerkung und Anhänge, falls vorhanden. Ohne Zeitraum umfasst es das ganze Schuljahr; mit `--days-forward`, `--from`, … nur Hausaufgaben, die in diesem Zeitraum *fällig* sind (WebUntis filtert nach der Stunde, in der sie aufgegeben wurden, deshalb schaut `untis` weiter zurück und filtert selbst nach Fälligkeit). Zusammen mit `--tests` werden beide Abschnitte gezeigt.
+
+`--now` zeigt die gerade laufende Stunde (mit Restzeit) und die nächste; nach Schulschluss oder am Wochenende die erste Stunde des nächsten Schultags. `--format json` gibt dasselbe als Daten aus, `--format waybar` das JSON, das ein [Waybar](https://github.com/Alexays/Waybar)-Custom-Modul erwartet (`text`, `tooltip`, `class`, wobei `class` der Status der Stunde oder `idle` ist). `--idle-empty` gibt zwischen den Stunden nichts aus, damit sich das Modul ausblendet. Mit `--max-age` wird die Leiste aus dem Cache gefüttert, statt WebUntis jede Minute abzufragen:
+
+```jsonc
+// ~/.config/waybar/config.jsonc
+"custom/untis": {
+  "exec": "untis --now --format waybar --max-age 10m --idle-empty",
+  "return-type": "json",
+  "interval": 60
+}
+```
 
 Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
 im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In
