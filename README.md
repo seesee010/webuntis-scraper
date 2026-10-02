@@ -1,5 +1,7 @@
 # WebUntis Scraper
 
+[![Tests](https://github.com/seesee010/webuntis-scraper/actions/workflows/tests.yml/badge.svg)](https://github.com/seesee010/webuntis-scraper/actions/workflows/tests.yml)
+
 🇩🇪 [Deutsche Version](README.de.md)
 
 Playwright-based scraper for WebUntis. Fetches your timetable, exams,
