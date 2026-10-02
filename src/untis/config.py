@@ -90,6 +90,10 @@ class ScraperConfig:
     calendar_days: bool = False
     # --tests without a window: from today to the end of the school year
     until_school_year_end: bool = False
+    # --homework without a window: the whole school year (from its start)
+    from_school_year_start: bool = False
+    # --homework: keep homework by due date (the API filters by lesson date)
+    homework_by_due_date: bool = False
 
     # Modules to enable
     scrape_timetable: bool = True

@@ -224,6 +224,9 @@ untis --free next                # heures libres au prochain jour de cours
 untis --start tomorrow || echo "sleep in"   # code de sortie 5 = pas de cours ce jour-là
 untis --tests                    # tous les contrôles à venir jusqu'à la fin de l'année scolaire
 untis -t --days-back 30 --days-forward 0   # contrôles des 30 derniers jours de cours (avec notes)
+untis --homework                 # tous les devoirs de cette année scolaire
+untis -H --days-forward 5        # devoirs à rendre dans les 5 prochains jours de cours
+untis -t -H                      # les deux sections
 ```
 
 `--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
@@ -277,6 +280,8 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 `--start`, `--end` et `--free` répondent à une question sur un jour et n'affichent que la réponse : `today` (par défaut), `tomorrow`, `next` (le prochain jour de cours), une date ou un jour de la semaine (le prochain). Les cours annulés et ceux dont ta classe a été retirée ne comptent pas ; un premier cours annulé décale donc `--start`. Les heures libres viennent de la grille horaire de l'école. S'il n'y a pas cours ce jour-là, `-` est affiché et le code de sortie est 5. `--format json` affiche `{"date", "start", "end", "first", "free"}`. Seul l'emploi du temps est chargé, et aucun fichier JSON n'est écrit.
 
 `--tests` (aussi `-t` / `--exams`) n'affiche que les contrôles et examens, triés par date avec « in N days », la note si WebUntis en a une, et les contrôles passés grisés. Sans période, il couvre tout d'aujourd'hui à la fin de l'année scolaire (le `days_forward` de ta configuration ne s'applique pas ici) ; avec `--days-forward`, `--from`, `--week`, … seulement cette période. Seuls les examens sont chargés.
+
+`--homework` (aussi `-H`) n'affiche que les devoirs : ceux à faire d'abord par date d'échéance (en retard en rouge), puis ceux terminés grisés avec un ✓, chacun avec son texte complet adapté à la largeur du terminal, une remarque et les pièces jointes s'il y en a. Sans période, il couvre toute l'année scolaire ; avec `--days-forward`, `--from`, … seulement les devoirs *à rendre* dans cette période (WebUntis filtre par le cours où ils ont été donnés, donc `untis` regarde plus loin en arrière et filtre lui-même par échéance). Avec `--tests`, les deux sections sont affichées.
 
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y

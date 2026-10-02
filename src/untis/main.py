@@ -22,7 +22,9 @@ from .config import (
 from .dates import parse_date, parse_day_spec, resolve_from_to, week_range
 from .exporter import write_json, write_latest
 from .scraper import Scraper
-from .summary import render_legend, render_summary, render_tests, resolve_color
+from .summary import (
+    render_homework, render_legend, render_summary, render_tests, resolve_color,
+)
 from .untis_client import LoginError, WebUntisClient, WebUntisError
 
 # Exit codes, so scripts and status bars can tell failures apart.
@@ -188,6 +190,11 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
              "year, or those in the window given with --days-forward, --from, ….",
     )
     ap.add_argument(
+        "-H", "--homework", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Only show homework: all of this school year, or those due in the window "
+             "given with --days-forward, --from, …. Combinable with --tests.",
+    )
+    ap.add_argument(
         "--oneline", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print one line per day instead of the day view "
              "(* changed, ~X~ cancelled/removed, ! exam).",
@@ -289,8 +296,9 @@ def _parse_args(
                        if getattr(args, f"{what}_q") is not None), None)
     if args.query and (shortcut or from_to or days):
         ap.error("--start/--end/--free can't be combined with other date options")
-    if args.tests and (args.query or args.oneline or args.table):
-        ap.error("--tests can't be combined with --start/--end/--free, --oneline or --table")
+    if (args.tests or args.homework) and (args.query or args.oneline or args.table):
+        ap.error("--tests/--homework can't be combined with --start/--end/--free, "
+                 "--oneline or --table")
     args.window_given = bool(shortcut or from_to or days)
     args.window = None
     if from_to:
@@ -386,8 +394,8 @@ async def _async_main(args: argparse.Namespace) -> int:
     _apply_date_shortcuts(cfg, args, today)
     if args.query:
         return await _answer_question(cfg, args, today, now)
-    if args.tests:
-        _only_tests(cfg, args)
+    if args.tests or args.homework:
+        _only_sections(cfg, args)
 
     payload, fetched = await _get_payload(cfg, args, today, now)
     if fetched:
@@ -395,8 +403,14 @@ async def _async_main(args: argparse.Namespace) -> int:
         write_latest(payload, cfg.output_dir, keep_raw=cfg.include_raw)
     color = resolve_color(args.color)
     layout = _layout(args)
-    if args.tests:
-        print(render_tests(payload, color=color, today=today, now=now))
+    if args.tests or args.homework:
+        parts = []
+        if args.tests:
+            parts.append(render_tests(payload, color=color, today=today, now=now,
+                                      upcoming_only=args.homework and not args.window_given))
+        if args.homework:
+            parts.append(render_homework(payload, color=color, today=today, now=now))
+        print("\n\n".join(parts))
     elif layout:
         print(render_summary(payload, color=color, layout=layout))
     if args.legend:
@@ -404,15 +418,18 @@ async def _async_main(args: argparse.Namespace) -> int:
     return 0
 
 
-def _only_tests(cfg, args: argparse.Namespace) -> None:
-    """--tests: fetch only the exams; without a window on the command line,
-    everything until the end of the school year (config days_forward is
-    ignored, it's meant for the day view)."""
-    cfg.scrape_timetable = cfg.scrape_homework = False
-    cfg.scrape_absences = cfg.scrape_messages = False
-    cfg.scrape_exams = True
+def _only_sections(cfg, args: argparse.Namespace) -> None:
+    """--tests/--homework: fetch only those modules. Without a window on
+    the command line: tests from today, homework from the start of the
+    school year, both until its end (config days_forward is meant for the
+    day view and is ignored). Homework is always kept by due date."""
+    cfg.scrape_timetable = cfg.scrape_absences = cfg.scrape_messages = False
+    cfg.scrape_exams = bool(args.tests)
+    cfg.scrape_homework = bool(args.homework)
+    cfg.homework_by_due_date = bool(args.homework)
     if not args.window_given:
         cfg.until_school_year_end = True
+        cfg.from_school_year_start = bool(args.homework)
 
 
 async def _get_payload(cfg, args: argparse.Namespace, today: date, now: datetime) -> tuple[dict, bool]:
@@ -510,7 +527,8 @@ def main() -> int:
         # Only the legend: no login, no network.
         print(render_legend(resolve_color(args.color)))
         return 0
-    _setup_logging(args.verbose, quiet=bool(_layout(args) or args.query or args.tests))
+    _setup_logging(args.verbose,
+                   quiet=bool(_layout(args) or args.query or args.tests or args.homework))
     if args.default_args:
         logging.getLogger(__name__).debug(
             "default_args from %s: %s", args.defaults_source, " ".join(args.default_args))

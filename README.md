@@ -219,6 +219,9 @@ untis --free next                # free periods on the next school day
 untis --start tomorrow || echo "sleep in"   # exit code 5 = no school that day
 untis --tests                    # all upcoming tests until the end of the school year
 untis -t --days-back 30 --days-forward 0   # tests of the last 30 school days (with grades)
+untis --homework                 # all homework of this school year
+untis -H --days-forward 5        # homework due in the next 5 school days
+untis -t -H                      # both sections
 ```
 
 `--from` / `--to` accept everything `--date` does, plus `today`, `tomorrow` and weekday names in English or German (`mon`, `monday`, `mo`, `montag`, …). A weekday means this week's; if `--to` would end up before `--from`, it means next week's.
@@ -272,6 +275,8 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 `--start`, `--end` and `--free` answer one question about a day and print only the answer: `today` (the default), `tomorrow`, `next` (the next school day), a date, or a weekday (the next one). Cancelled lessons and lessons your class was removed from don't count, so a cancelled first period moves `--start` later. Free periods come from the school's time grid. With no school that day they print `-` and exit with code 5. `--format json` prints `{"date", "start", "end", "first", "free"}`. Only the timetable is fetched, and no JSON files are written.
 
 `--tests` (also `-t` / `--exams`) shows only tests and exams, sorted by date with "in N days", the grade if WebUntis has one, and past tests dimmed. Without a window it covers everything from today until the end of the school year (the `days_forward` from your config doesn't apply here); with `--days-forward`, `--from`, `--week`, … only that window. Only the exams are fetched.
+
+`--homework` (also `-H`) shows only homework: open ones first by due date (overdue ones in red), then completed ones dimmed with a ✓, each with its full text wrapped to the terminal, a note and attachments if there are any. Without a window it covers the whole school year; with `--days-forward`, `--from`, … only homework *due* in that window (WebUntis filters by the lesson it was given in, so `untis` looks further back and filters by due date itself). Together with `--tests` both sections are shown.
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
 inside the data directory (`~/.local/share/untis/`, or the project
