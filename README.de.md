@@ -47,19 +47,52 @@ Bot-Detection-Vektoren (`navigator.webdriver`, `navigator.plugins`,
 
 ### Mit pipx (empfohlen)
 
-Installiert `untis` als Befehl in einer eigenen Umgebung:
+[pipx](https://pipx.pypa.io) installiert `untis` als Befehl in einer eigenen, abgeschotteten Umgebung, so dass es nicht mit anderen Python-Paketen kollidiert.
+
+**1. pipx installieren** (einmalig):
+
+```bash
+sudo pacman -S python-pipx            # Arch / Omarchy
+sudo apt install pipx                 # Debian / Ubuntu
+brew install pipx                     # macOS
+python -m pip install --user pipx     # alles andere, auch Windows
+
+pipx ensurepath                       # nimmt ~/.local/bin in den PATH auf (danach neues Terminal öffnen)
+```
+
+> Getestet wurden hier nur die Befehle für Arch / Omarchy. Die Befehle für Debian / Ubuntu,
+> macOS und Windows (und der Windows-Pfad für Chromium weiter unten) stammen aus der
+> [offiziellen pipx-Dokumentation](https://pipx.pypa.io/stable/installation/) und wurden hier nicht getestet.
+
+**2. `untis` installieren:**
 
 ```bash
 pipx install git+https://github.com/seesee010/webuntis-scraper
 untis --version
 ```
 
-Chromium wird nur für den Browser-Fallback gebraucht (`--transport browser`, 2FA/SSO):
+**3. Schule und Login einrichten**, siehe [Konfiguration](#konfiguration). Danach:
 
 ```bash
-pipx inject --include-apps webuntis-scraper playwright   # nur für den Browser-Fallback
-playwright install chromium
+untis -s --today
 ```
+
+**Optional: Chromium.** `untis` spricht per HTTP mit WebUntis und braucht einen Browser nur als Fallback (`--transport browser`, 2FA/SSO). So wird er eingerichtet (unter Windows endet der Pfad auf `\webuntis-scraper\Scripts\playwright.exe`):
+
+```bash
+"$(pipx environment --value PIPX_LOCAL_VENVS)/webuntis-scraper/bin/playwright" install chromium
+```
+
+**Aktualisieren / deinstallieren:**
+
+```bash
+pipx reinstall webuntis-scraper       # holt die neueste Version von GitHub
+pipx uninstall webuntis-scraper
+```
+
+`pipx upgrade` aktualisiert Installationen von GitHub nicht (es prüft nur Paket-Indizes), deshalb `pipx reinstall` verwenden.
+
+Wenn du auch am Code arbeitest, nimm stattdessen das Setup unten. Beide wollen `~/.local/bin/untis` sein, also nicht beides installieren.
 
 ### Aus einem Checkout (Entwicklung)
 

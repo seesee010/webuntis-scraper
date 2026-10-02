@@ -44,19 +44,51 @@ WebUntis 抓取工具（使用普通 HTTP，必要时用 Playwright 作为备用
 
 ### 使用 pipx（推荐）
 
-把 `untis` 安装为命令，并使用独立的环境：
+[pipx](https://pipx.pypa.io) 会把 `untis` 安装为命令，并放在独立的隔离环境中，不会和其他 Python 包冲突。
+
+**1. 安装 pipx**（只需一次）：
+
+```bash
+sudo pacman -S python-pipx            # Arch / Omarchy
+sudo apt install pipx                 # Debian / Ubuntu
+brew install pipx                     # macOS
+python -m pip install --user pipx     # 其他系统，包括 Windows
+
+pipx ensurepath                       # 把 ~/.local/bin 加入 PATH（之后请打开新的终端）
+```
+
+> 这里只测试了 Arch / Omarchy 的命令。Debian / Ubuntu、macOS 和 Windows 的命令（以及下面 Windows 上
+> Chromium 的路径）来自 [pipx 官方文档](https://pipx.pypa.io/stable/installation/)，没有在这里测试过。
+
+**2. 安装 `untis`：**
 
 ```bash
 pipx install git+https://github.com/seesee010/webuntis-scraper
 untis --version
 ```
 
-只有浏览器备用方案（`--transport browser`、双重验证/SSO）才需要 Chromium：
+**3. 配置**学校和登录信息，参见[配置](#配置)。然后：
 
 ```bash
-pipx inject --include-apps webuntis-scraper playwright   # 只用于浏览器备用方案
-playwright install chromium
+untis -s --today
 ```
+
+**可选：Chromium。** `untis` 通过普通 HTTP 与 WebUntis 通信，只有备用方案（`--transport browser`、双重验证/SSO）才需要浏览器。启用方法如下（在 Windows 上，路径以 `\webuntis-scraper\Scripts\playwright.exe` 结尾）：
+
+```bash
+"$(pipx environment --value PIPX_LOCAL_VENVS)/webuntis-scraper/bin/playwright" install chromium
+```
+
+**更新 / 卸载：**
+
+```bash
+pipx reinstall webuntis-scraper       # 从 GitHub 获取最新版本
+pipx uninstall webuntis-scraper
+```
+
+`pipx upgrade` 不会更新从 GitHub 安装的版本（它只检查软件包索引），所以请使用 `pipx reinstall`。
+
+如果你也要修改代码，请改用下面的安装方式。两者都会使用 `~/.local/bin/untis`，所以不要同时安装。
 
 ### 从源码目录安装（开发）
 

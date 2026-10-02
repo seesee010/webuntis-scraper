@@ -49,19 +49,52 @@ En mode navigateur, `playwright-stealth` masque les indices courants de détecti
 
 ### Avec pipx (recommandé)
 
-Installe `untis` comme commande dans son propre environnement :
+[pipx](https://pipx.pypa.io) installe `untis` comme commande dans son propre environnement isolé, sans conflit avec d'autres paquets Python.
+
+**1. Installer pipx** (une seule fois) :
+
+```bash
+sudo pacman -S python-pipx            # Arch / Omarchy
+sudo apt install pipx                 # Debian / Ubuntu
+brew install pipx                     # macOS
+python -m pip install --user pipx     # tout le reste, y compris Windows
+
+pipx ensurepath                       # ajoute ~/.local/bin au PATH (ouvre ensuite un nouveau terminal)
+```
+
+> Seules les commandes pour Arch / Omarchy ont été testées ici. Les commandes pour Debian / Ubuntu,
+> macOS et Windows (ainsi que le chemin Windows pour Chromium plus bas) proviennent de la
+> [documentation officielle de pipx](https://pipx.pypa.io/stable/installation/) et n'ont pas été testées ici.
+
+**2. Installer `untis` :**
 
 ```bash
 pipx install git+https://github.com/seesee010/webuntis-scraper
 untis --version
 ```
 
-Chromium n'est nécessaire que pour le mode navigateur de secours (`--transport browser`, 2FA/SSO) :
+**3. Configurer** ton école et ta connexion, voir [Configuration](#configuration). Ensuite :
 
 ```bash
-pipx inject --include-apps webuntis-scraper playwright   # seulement pour le mode navigateur
-playwright install chromium
+untis -s --today
 ```
+
+**Optionnel : Chromium.** `untis` communique avec WebUntis en HTTP simple et n'a besoin d'un navigateur qu'en secours (`--transport browser`, 2FA/SSO). Pour l'activer (sous Windows, le chemin se termine par `\webuntis-scraper\Scripts\playwright.exe`) :
+
+```bash
+"$(pipx environment --value PIPX_LOCAL_VENVS)/webuntis-scraper/bin/playwright" install chromium
+```
+
+**Mettre à jour / désinstaller :**
+
+```bash
+pipx reinstall webuntis-scraper       # récupère la dernière version depuis GitHub
+pipx uninstall webuntis-scraper
+```
+
+`pipx upgrade` ne met pas à jour les installations depuis GitHub (il ne consulte que les index de paquets), utilise donc `pipx reinstall`.
+
+Si tu travailles aussi sur le code, utilise plutôt l'installation ci-dessous. Les deux veulent être `~/.local/bin/untis`, n'installe donc pas les deux.
 
 ### Depuis une copie du dépôt (développement)
 
