@@ -157,6 +157,22 @@ untis -s --today
    UNTIS_PASSWORD=你的密码
    ```
 
+3. **可选：默认参数。** 总是想用的选项可以写进 `config.json`：
+
+   ```jsonc
+   {
+     "default_args": ["--short"]
+   }
+   ```
+
+   ```bash
+   untis                                  # = untis --short
+   untis --no-short                       # 本次运行关闭默认选项
+   UNTIS_DEFAULT_ARGS="-s --today" untis   # 通过环境变量设置
+   ```
+
+   显式给出的选项优先：`untis --transport browser` 会替换默认的 `--transport http`；显式的时间范围（`--week`、`--from`、`--days-forward` 等）会替换默认的时间范围，而不会产生冲突。开关选项可以用 `--no-short`、`--no-keep-raw`、`--no-calendar-days` 或 `--no-verbose` 在单次运行中关闭。`UNTIS_DEFAULT_ARGS` 的作用相同，并且优先于配置文件；`--config`、`--env`、`--help` 和 `--version` 不能作为默认参数。`untis -v` 会显示实际使用的参数。
+
 ## 使用方法
 
 ```bash

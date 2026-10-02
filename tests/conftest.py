@@ -16,3 +16,11 @@ def _never_touch_real_data_dirs(monkeypatch):
     Tests must never touch the real user's data, so that step is a no-op
     in every test."""
     monkeypatch.setattr(config_mod, "_secure_data_dirs", lambda cfg, env_path: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_default_args(monkeypatch):
+    """Never pick up the real user's "default_args" from ~/.config/untis:
+    UNTIS_DEFAULT_ARGS takes precedence, so an empty one means no defaults.
+    Tests of the loader itself delete it again."""
+    monkeypatch.setenv("UNTIS_DEFAULT_ARGS", "")

@@ -166,6 +166,22 @@ projet qui est utilisé pour tout (pratique sous Windows ou pour le développeme
    UNTIS_PASSWORD=tonMotDePasse
    ```
 
+3. **Optionnel : arguments par défaut.** Les options que tu veux toujours peuvent aller dans `config.json` :
+
+   ```jsonc
+   {
+     "default_args": ["--short"]
+   }
+   ```
+
+   ```bash
+   untis                                  # = untis --short
+   untis --no-short                       # désactiver le défaut pour une exécution
+   UNTIS_DEFAULT_ARGS="-s --today" untis   # pareil via l'environnement
+   ```
+
+   Les options explicites l'emportent : `untis --transport browser` remplace un `--transport http` par défaut, et une période explicite (`--week`, `--from`, `--days-forward`, …) remplace celle par défaut au lieu d'entrer en conflit. Les options booléennes se désactivent pour une exécution avec `--no-short`, `--no-keep-raw`, `--no-calendar-days` ou `--no-verbose`. `UNTIS_DEFAULT_ARGS` fonctionne de la même façon et l'emporte sur la configuration ; `--config`, `--env`, `--help` et `--version` ne sont pas autorisés par défaut. `untis -v` affiche les arguments réellement utilisés.
+
 ## Utilisation
 
 ```bash
