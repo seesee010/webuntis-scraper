@@ -64,7 +64,7 @@ pipx ensurepath                       # ajoute ~/.local/bin au PATH (ouvre ensui
 
 > Seules les commandes pour Arch / Omarchy ont été testées ici. Les commandes pour Debian / Ubuntu,
 > macOS et Windows (ainsi que le chemin Windows pour Chromium plus bas) proviennent de la
-> [documentation officielle de pipx](https://pipx.pypa.io/stable/installation/) et n'ont pas été testées ici.
+> [documentation officielle de pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) et n'ont pas été testées ici.
 
 **2. Installer `untis` :**
 
