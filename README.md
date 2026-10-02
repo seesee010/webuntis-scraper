@@ -211,6 +211,8 @@ untis --keep-raw -v
 # Compact day view in the terminal (JSON is still written)
 untis --short                   # or -s
 untis -s --days-forward 0       # today only
+untis --oneline --week          # one line per day
+untis --table --week            # week grid: days as columns, periods as rows
 ```
 
 `--from` / `--to` accept everything `--date` does, plus `today`, `tomorrow` and weekday names in English or German (`mon`, `monday`, `mo`, `montag`, …). A weekday means this week's; if `--to` would end up before `--from`, it means next week's.
@@ -253,6 +255,13 @@ header then says `(next school day)`.
 
 Below the days come upcoming exams, open homework and a line with
 absences and unread messages. Colors are only used on a terminal; `--color always` forces them (e.g. for `less -R`), `--color never` or `NO_COLOR=1` turns them off. `untis --legend` prints what each color and marker means.
+
+Two more compact layouts. `--oneline` prints one line per day, with one token per period of the school's time grid (a double lesson appears twice, a free period as `-`, parallel groups as `NET/PROG`). `--table` prints a grid with the days as columns and the periods as rows, one table per week, fitted to the terminal width, followed by the exams/homework part like `-s`. Both use the same colors; without colors, `*` marks a change, `~X~` a cancelled or removed lesson and `!` an exam.
+
+```
+Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
+Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
+```
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
 inside the data directory (`~/.local/share/untis/`, or the project

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 from datetime import date, datetime
 from typing import Any, Optional
@@ -337,6 +338,114 @@ def _render_timetable(
     return out
 
 
+# --- --oneline / --table (#23) ---------------------------------------------
+def _days_rows(timetable: dict) -> dict[str, list[dict]]:
+    days = _rows_from_grid(timetable) if "days" in timetable else _rows_from_lessons(timetable)
+    return {d: sorted(rows, key=lambda r: (r["start"], r["subject"]))
+            for d, rows in days.items() if d and rows}
+
+
+def _grid_units(timetable: dict, days: dict[str, list[dict]]) -> list[tuple[str, str]]:
+    """The school's periods (time grid from /app/data); without it, the
+    distinct periods of the lessons themselves."""
+    grid = [(u["start"], u["end"]) for u in timetable.get("time_grid") or []
+            if u.get("start") and u.get("end")]
+    if grid:
+        return grid
+    return sorted({(r["start"], r["end"]) for rows in days.values() for r in rows
+                   if r["start"] and r["end"]})
+
+
+def _slots(rows: list[dict], units: list[tuple[str, str]]) -> list[list[dict]]:
+    """For every period, the rows overlapping it (a double lesson fills two)."""
+    return [[r for r in rows if r["start"] < end and r["end"] > start] for start, end in units]
+
+
+def _token(r: dict, st: _Style) -> str:
+    """One lesson as a short token: MATH, ENG* (changed), ~GEO~ (cancelled
+    or removed; struck through with colors), MATH! (exam), ★ EVENT."""
+    if r.get("is_event") or not r["subject"]:
+        return st.role("event", f"★ {r['title'] or r['subject']}")
+    name, label = r["subject"], _label(r)
+    if label in ("cancelled", "removed"):
+        return st.role(label, name) if st.enabled else f"~{name}~"
+    if label == "exam":
+        return st.role("exam", name) + "!"
+    if label in ("changed", "substitution", "extra", "no teacher"):
+        return st.role(label, name) + "*"
+    return name
+
+
+def _cell(rows: list[dict], st: _Style, with_room: bool = False) -> str:
+    """All lessons of one period, parallel ones joined with "/"."""
+    parts, seen = [], set()
+    for r in rows:
+        key = (r["subject"], r.get("title"), _label(r))
+        if key in seen:
+            continue
+        seen.add(key)
+        text = _token(r, st)
+        if with_room and len(rows) == 1 and r["rooms"]:
+            text += " " + _rooms(r["rooms"], st)[1]
+        parts.append(text)
+    return "/".join(parts)
+
+
+def _fit(styled: str, width: int) -> str:
+    """Pad to `width` visible chars; cut longer text with "…" (the cut
+    version drops colors, it can't be split safely)."""
+    plain = _plain(styled)
+    if len(plain) <= width:
+        return styled + " " * (width - len(plain))
+    return plain[: max(width - 1, 0)] + "…"
+
+
+def _render_oneline(timetable: dict, st: _Style, window: dict | None = None) -> list[str]:
+    days = _days_rows(timetable)
+    if not days:
+        return [st.dim("No lessons in this window.")]
+    units = _grid_units(timetable, days)
+    window = window or {}
+    out = []
+    for day_iso, rows in sorted(days.items()):
+        slots = _slots(rows, units)
+        used = [i for i, slot in enumerate(slots) if slot]
+        tokens = ([_cell(slot, st) if slot else st.dim("-")
+                   for slot in slots[used[0]: used[-1] + 1]] if used else [])
+        placed = {id(r) for slot in slots for r in slot}
+        tokens += [_token(r, st) for r in rows if id(r) not in placed]  # outside the grid
+        note = window.get("note", "") if day_iso == window.get("start") else ""
+        out.append(_day_header(day_iso, rows, note, st) + "  " + " ".join(tokens))
+    return out
+
+
+def _render_table(
+    timetable: dict, st: _Style, window: dict | None = None, width: int | None = None,
+) -> list[str]:
+    days = _days_rows(timetable)
+    if not days:
+        return ["", st.dim("  No lessons in this window.")]
+    width = width or shutil.get_terminal_size((100, 24)).columns
+    units = _grid_units(timetable, days)
+    weeks: dict[tuple[int, int], list[str]] = {}
+    for day_iso in sorted(days):
+        weeks.setdefault(date.fromisoformat(day_iso).isocalendar()[:2], []).append(day_iso)
+    out: list[str] = []
+    for week_days in weeks.values():
+        slots = {d: _slots(days[d], units) for d in week_days}
+        used = [i for i in range(len(units)) if any(slots[d][i] for d in week_days)]
+        if not used:
+            continue
+        col_w = max(10, min(20, (width - 8) // len(week_days) - 2))
+        out.append("")
+        out.append((" " * 7 + "  ".join(_fit(st.bold(_fmt_day(d)), col_w)
+                                       for d in week_days)).rstrip())
+        for i in range(used[0], used[-1] + 1):
+            cells = [_fit(_cell(slots[d][i], st, with_room=True), col_w) for d in week_days]
+            out.append(f"{units[i][0]:<7}" + "  ".join(cells).rstrip())
+    return out
+
+
 def _render_exams(exams: dict, st: _Style) -> list[str]:
     items = exams.get("exams") or []
     if not items:
@@ -389,12 +498,17 @@ def _count_line(payload: dict, st: _Style) -> str:
 
 def render_summary(
     payload: dict[str, Any], color: Optional[bool] = None,
-    now: Optional[datetime] = None,
+    now: Optional[datetime] = None, layout: str = "days", width: int | None = None,
 ) -> str:
     """`now` marks the running lesson on today's block (default: the
     current time); pass it explicitly for tests."""
     st = _Style(use_color() if color is None else color)
     now = now or datetime.now()
+    if layout == "oneline":
+        section = payload.get("timetable") or {}
+        if "error" in section:
+            return st.red(f"timetable: {section['error']}")
+        return "\n".join(_render_oneline(section, st, (payload.get("meta") or {}).get("window")))
     meta = payload.get("meta") or {}
     window = meta.get("window") or {}
     header = st.bold(f"{meta.get('user') or ''}") + st.dim(
@@ -413,7 +527,9 @@ def render_summary(
         if "error" in section:
             lines += ["", st.red(f"{name}: {section['error']}")]
             continue
-        if name == "timetable":
+        if name == "timetable" and layout == "table":
+            lines += _render_table(section, st, window, width)
+        elif name == "timetable":
             lines += _render_timetable(section, st, window, now)
         else:
             lines += render(section, st)

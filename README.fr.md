@@ -216,6 +216,8 @@ untis --keep-raw -v
 # Vue compacte par jour dans le terminal (le JSON est quand même écrit)
 untis --short                   # ou -s
 untis -s --days-forward 0       # seulement aujourd'hui
+untis --oneline --week          # une ligne par jour
+untis --table --week            # grille de la semaine : jours en colonnes, heures en lignes
 ```
 
 `--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
@@ -258,6 +260,13 @@ et les jours où tous les cours sont annulés sont sautés ; l'en-tête du jour 
 
 Sous les jours apparaissent les examens à venir, les devoirs non faits et une ligne avec
 les absences et les messages non lus. Les couleurs ne sont utilisées que dans un terminal ; `--color always` les force (par ex. pour `less -R`), `--color never` ou `NO_COLOR=1` les désactive. `untis --legend` affiche la signification de chaque couleur et indication.
+
+Deux autres vues compactes. `--oneline` affiche une ligne par jour, avec un élément par heure de la grille horaire de l'école (un cours double apparaît deux fois, une heure libre comme `-`, les groupes parallèles comme `NET/PROG`). `--table` affiche une grille avec les jours en colonnes et les heures en lignes, un tableau par semaine, adapté à la largeur du terminal, suivi des examens et devoirs comme avec `-s`. Les deux utilisent les mêmes couleurs ; sans couleurs, `*` indique un changement, `~X~` un cours annulé ou retiré et `!` un examen.
+
+```
+Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
+Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
+```
 
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y
