@@ -5,8 +5,8 @@ from datetime import datetime
 
 import pytest
 
-from src import summary as summary_mod
-from src.summary import (
+from untis import summary as summary_mod
+from untis.summary import (
     _fmt_minutes,
     _live_state,
     _minutes_between,

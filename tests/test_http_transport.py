@@ -17,9 +17,9 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from src.config import ScraperConfig
-from src.http_transport import HttpTransport
-from src.untis_client import LoginError, WebUntisClient
+from untis.config import ScraperConfig
+from untis.http_transport import HttpTransport
+from untis.untis_client import LoginError, WebUntisClient
 
 
 def _jwt(claims: dict) -> str:

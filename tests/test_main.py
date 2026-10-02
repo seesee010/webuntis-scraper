@@ -6,9 +6,9 @@ import sys
 import pytest
 from playwright.async_api import Error as PlaywrightError
 
-from src import main as main_mod
-from src.config import ConfigError
-from src.untis_client import LoginError, WebUntisError
+from untis import main as main_mod
+from untis.config import ConfigError
+from untis.untis_client import LoginError, WebUntisError
 
 
 def _run(monkeypatch, capsys, exc: BaseException, *argv: str) -> tuple[int, str]:
@@ -71,7 +71,7 @@ class TestDateShortcuts:
 
     def _cfg(self, monkeypatch, *argv):
         from datetime import date
-        from src.config import ScraperConfig
+        from untis.config import ScraperConfig
         cfg = ScraperConfig()
         main_mod._apply_date_shortcuts(cfg, self._parse(monkeypatch, *argv),
                                        date(2026, 10, 2))

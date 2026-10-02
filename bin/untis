@@ -1,6 +1,7 @@
 #!/bin/sh
-# Launcher for the WebUntis scraper. Symlink it into a directory on your
-# PATH, e.g.:  ln -s "$PWD/bin/untis" ~/.local/bin/untis
+# Launcher for a dev checkout (no install needed). Symlink it into a
+# directory on your PATH:  ln -s "$PWD/bin/untis" ~/.local/bin/untis
+# Alternatively install the package: pipx install . (see README).
 set -e
 ROOT=$(dirname "$(dirname "$(readlink -f "$0")")")
 PY="$ROOT/.venv/bin/python"
@@ -8,4 +9,4 @@ if [ ! -x "$PY" ]; then
     echo "untis: no virtualenv at $ROOT/.venv - see README (Installation)" >&2
     exit 1
 fi
-PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" exec "$PY" -m src "$@"
+PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" exec "$PY" -m untis "$@"

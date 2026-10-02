@@ -47,33 +47,50 @@ En mode navigateur, `playwright-stealth` masque les indices courants de détecti
 
 ## Installation
 
-Linux / macOS :
+### Avec pipx (recommandé)
+
+Installe `untis` comme commande dans son propre environnement :
+
+```bash
+pipx install git+https://github.com/seesee010/webuntis-scraper
+untis --version
+```
+
+Chromium n'est nécessaire que pour le mode navigateur de secours (`--transport browser`, 2FA/SSO) :
+
+```bash
+pipx inject --include-apps webuntis-scraper playwright   # seulement pour le mode navigateur
+playwright install chromium
+```
+
+### Depuis une copie du dépôt (développement)
+
+Linux / macOS:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 playwright install chromium
+pytest                     # lancer les tests
 ```
 
-Windows (PowerShell) :
+Windows (PowerShell):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -e ".[dev]"
 playwright install chromium
 ```
 
-## Installer la commande `untis` (Linux / macOS)
-
-`bin/untis` est un petit lanceur qui exécute le scraper avec le `.venv` du projet.
-Crée un lien vers ce fichier dans un dossier de ton `PATH` (`~/.local/bin` est dans le
-`PATH` de la plupart des distributions Linux) :
+`bin/untis` lance la copie du dépôt avec son `.venv`, sans rien installer. Crée un lien
+vers ce fichier dans un dossier de ton `PATH` (`~/.local/bin` est dans le `PATH` de la
+plupart des distributions Linux) :
 
 ```bash
 ln -s "$PWD/bin/untis" ~/.local/bin/untis
-untis -s --days-forward 0
+untis -s --today
 ```
 
 ## Configuration
@@ -120,10 +137,10 @@ projet qui est utilisé pour tout (pratique sous Windows ou pour le développeme
 
 ```bash
 # Exécution par défaut (sans fenêtre, réutilise la session enregistrée)
-python -m src
+untis
 
 # Ignorer la session enregistrée et se reconnecter
-python -m src --form-login --no-headless --clear-session
+untis --form-login --no-headless --clear-session
 
 # Autre période : aujourd'hui plus les 4 prochains jours de cours
 # (les week-ends, les vacances et les jours entièrement annulés ne comptent pas)
@@ -140,11 +157,11 @@ untis -s --next-week
 untis -s --date 12.10.     # aussi 12.10.2026 ou 2026-10-12
 
 # Conserver aussi les données brutes de l'API
-python -m src --keep-raw -v
+untis --keep-raw -v
 
 # Vue compacte par jour dans le terminal (le JSON est quand même écrit)
-python -m src --short                   # ou -s
-python -m src -s --days-forward 0       # seulement aujourd'hui
+untis --short                   # ou -s
+untis -s --days-forward 0       # seulement aujourd'hui
 ```
 
 `--short` affiche un bloc par jour de cours : heure, matière, enseignant, salle, et une
@@ -201,7 +218,7 @@ que tes identifiants sont corrects, vérifie :
 3. **CAPTCHA / SSO / 2FA ?** → `untis --transport browser --no-headless --form-login`
 4. **Capture d'écran :** `logs/login_failed.png` (dans le dossier de données) montre ce
    que le navigateur a vu.
-5. **Sortie détaillée :** `python -m src -v`.
+5. **Sortie détaillée :** `untis -v`.
 
 ### Codes de sortie
 
@@ -269,10 +286,12 @@ ajoute `-v` pour voir la trace complète.
 ## Structure du projet
 
 ```
+pyproject.toml      # métadonnées du paquet, dépendances, commande `untis`
 bin/
-  untis             # lanceur pour ton PATH
-src/
-  __init__.py
+  untis             # lanceur pour une copie du dépôt
+src/untis/
+  __init__.py       # version
+  __main__.py       # python -m untis
   main.py           # ligne de commande
   config.py         # charge config.json + .env
   browser.py        # Playwright + stealth

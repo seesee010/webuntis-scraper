@@ -1,5 +1,2 @@
-"""Shared pytest config."""
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
+"""Shared pytest config. `untis` is importable via `pythonpath = ["src"]`
+in pyproject.toml, so no sys.path tweaks are needed here."""

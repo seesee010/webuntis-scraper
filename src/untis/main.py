@@ -10,6 +10,7 @@ from pathlib import Path
 
 import httpx
 
+from . import __version__
 from .browser import BrowserSession
 from .config import (
     DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, ConfigError, load_config,
@@ -44,11 +45,14 @@ def _setup_logging(verbose: bool, quiet: bool = False) -> None:
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         prog="untis",
-        description="Scrape WebUntis data via Playwright (timetable, exams, "
-                    "homework, absences, messages).",
+        description="Your WebUntis timetable, exams, homework, absences and "
+                    "messages in the terminal (plain HTTP, Playwright as a fallback).",
         epilog=f"exit codes: {EXIT_ERROR} unexpected error, {EXIT_CONFIG} config/setup, "
                f"{EXIT_LOGIN} login failed, {EXIT_NETWORK} network/WebUntis error, "
                f"{EXIT_ABORTED} aborted",
+    )
+    ap.add_argument(
+        "-V", "--version", action="version", version=f"untis {__version__}",
     )
     ap.add_argument(
         "--config", default=str(DEFAULT_CONFIG_PATH),

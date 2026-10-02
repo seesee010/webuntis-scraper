@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 
-from src.config import load_config  # noqa: E402
+from untis.config import load_config  # noqa: E402
 
 
 def _write(path: Path, content: str) -> Path:
@@ -60,7 +58,7 @@ def test_warns_when_password_missing_with_user():
     import logging as _logging
     handler = _logging.Handler()
     handler.emit = lambda r: caplog.append(r.getMessage())
-    logger = _logging.getLogger("src.config")
+    logger = _logging.getLogger("untis.config")
     logger.addHandler(handler)
     try:
         cfg = load_config(js, env)
@@ -88,7 +86,7 @@ def _cfg_files(data: dict) -> tuple[Path, Path]:
 
 
 import pytest  # noqa: E402
-from src.config import ConfigError  # noqa: E402
+from untis.config import ConfigError  # noqa: E402
 
 
 @pytest.mark.parametrize("key", ["days_back", "days_forward"])

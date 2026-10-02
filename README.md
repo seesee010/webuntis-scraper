@@ -43,13 +43,32 @@ mode (`navigator.webdriver`, `navigator.plugins`, `navigator.languages`, …).
 
 ## Installation
 
+### With pipx (recommended)
+
+Installs `untis` as a command in its own environment:
+
+```bash
+pipx install git+https://github.com/seesee010/webuntis-scraper
+untis --version
+```
+
+Chromium is only needed for the browser fallback (`--transport browser`, 2FA/SSO):
+
+```bash
+pipx inject --include-apps webuntis-scraper playwright   # only for the browser fallback
+playwright install chromium
+```
+
+### From a checkout (development)
+
 Linux / macOS:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 playwright install chromium
+pytest                     # run the tests
 ```
 
 Windows (PowerShell):
@@ -57,19 +76,16 @@ Windows (PowerShell):
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -e ".[dev]"
 playwright install chromium
 ```
 
-## Install as `untis` command (Linux / macOS)
-
-`bin/untis` is a small launcher that runs the scraper with the
-project's `.venv`. Link it into a directory on your `PATH`
-(`~/.local/bin` is on the `PATH` of most Linux distros):
+`bin/untis` runs the checkout with its `.venv` without installing anything. Link it
+into a directory on your `PATH` (`~/.local/bin` is on the `PATH` of most Linux distros):
 
 ```bash
 ln -s "$PWD/bin/untis" ~/.local/bin/untis
-untis -s --days-forward 0
+untis -s --today
 ```
 
 ## Configuration
@@ -116,10 +132,10 @@ everything instead (handy on Windows or for development).
 
 ```bash
 # Default run (headless, reuses the saved session)
-python -m src
+untis
 
 # Ignore the saved session and log in again
-python -m src --form-login --no-headless --clear-session
+untis --form-login --no-headless --clear-session
 
 # Different time window: today plus the next 4 school days
 # (weekends, holidays and fully cancelled days don't count)
@@ -136,11 +152,11 @@ untis -s --next-week
 untis -s --date 12.10.     # also 12.10.2026 or 2026-10-12
 
 # Also keep the raw API payloads
-python -m src --keep-raw -v
+untis --keep-raw -v
 
 # Compact day view in the terminal (JSON is still written)
-python -m src --short                   # or -s
-python -m src -s --days-forward 0       # today only
+untis --short                   # or -s
+untis -s --days-forward 0       # today only
 ```
 
 `--short` prints one block per school day: time, subject, teacher, room,
@@ -197,7 +213,7 @@ page`) even though your credentials are correct, check:
 3. **CAPTCHA / SSO / 2FA?** → `untis --transport browser --no-headless --form-login`
 4. **Screenshot:** `logs/login_failed.png` (in the data directory) shows
    what the browser saw.
-5. **Verbose output:** `python -m src -v`.
+5. **Verbose output:** `untis -v`.
 
 ### Exit codes
 
@@ -265,10 +281,12 @@ add `-v` for the full traceback.
 ## Project structure
 
 ```
+pyproject.toml      # package metadata, dependencies, `untis` command
 bin/
-  untis             # launcher for your PATH
-src/
-  __init__.py
+  untis             # launcher for a dev checkout
+src/untis/
+  __init__.py       # version
+  __main__.py       # python -m untis
   main.py           # CLI
   config.py         # load config.json + .env
   browser.py        # Playwright + stealth
