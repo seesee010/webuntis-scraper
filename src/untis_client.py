@@ -43,7 +43,7 @@ from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PWTimeout
 
 from .browser import BrowserSession
-from .config import ScraperConfig
+from .config import LOGS_DIR, ScraperConfig
 
 log = logging.getLogger(__name__)
 
@@ -242,7 +242,7 @@ class WebUntisClient:
             await self._screenshot("login_no_form")
             raise WebUntisError(
                 "Could not find login form. Run with --no-headless to debug. "
-                "Screenshot saved to logs/login_no_form.png"
+                f"Screenshot saved to {LOGS_DIR / 'login_no_form.png'}"
             )
         await user_loc.fill(self.cfg.username)
 
@@ -277,7 +277,7 @@ class WebUntisClient:
             raise WebUntisError(
                 f"Form login did not redirect away from the login page. "
                 f"Server message: {err_text or 'none'}. "
-                f"Screenshot: logs/login_failed.png"
+                f"Screenshot: {LOGS_DIR / 'login_failed.png'}"
             )
 
     async def _has_2fa_field(self) -> bool:
@@ -304,8 +304,9 @@ class WebUntisClient:
         if not self._page:
             return
         try:
-            await self._page.screenshot(path=f"logs/{name}.png", full_page=True)
-            log.info("Saved debug screenshot to logs/%s.png", name)
+            path = LOGS_DIR / f"{name}.png"
+            await self._page.screenshot(path=str(path), full_page=True)
+            log.info("Saved debug screenshot to %s", path)
         except Exception:
             pass
 

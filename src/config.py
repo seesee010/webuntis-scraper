@@ -17,11 +17,27 @@ from dotenv import dotenv_values
 log = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.json"
-DEFAULT_ENV_PATH = PROJECT_ROOT / ".env"
-SESSIONS_DIR = PROJECT_ROOT / "sessions"
-OUT_DIR = PROJECT_ROOT / "out"
-LOGS_DIR = PROJECT_ROOT / "logs"
+
+
+def _xdg_dir(var: str, fallback: str) -> Path:
+    return Path(os.environ.get(var) or Path.home() / fallback) / "untis"
+
+
+# Installed use: config + .env in ~/.config/untis, sessions/out/logs in
+# ~/.local/share/untis. Without ~/.config/untis/config.json everything
+# stays in the project folder (dev checkout / Windows).
+XDG_CONFIG_DIR = _xdg_dir("XDG_CONFIG_HOME", ".config")
+XDG_DATA_DIR = _xdg_dir("XDG_DATA_HOME", ".local/share")
+if (XDG_CONFIG_DIR / "config.json").exists():
+    CONFIG_DIR, DATA_DIR = XDG_CONFIG_DIR, XDG_DATA_DIR
+else:
+    CONFIG_DIR = DATA_DIR = PROJECT_ROOT
+
+DEFAULT_CONFIG_PATH = CONFIG_DIR / "config.json"
+DEFAULT_ENV_PATH = CONFIG_DIR / ".env"
+SESSIONS_DIR = DATA_DIR / "sessions"
+OUT_DIR = DATA_DIR / "out"
+LOGS_DIR = DATA_DIR / "logs"
 
 
 @dataclass
@@ -157,6 +173,11 @@ def load_config(
             log.debug("Unknown config key: %s", k)
 
     cfg.derived_urls()
+
+    # A relative output_dir ("out") means relative to the data dir, not
+    # to wherever the command happens to be run from.
+    if not Path(cfg.output_dir).is_absolute():
+        cfg.output_dir = str(DATA_DIR / cfg.output_dir)
 
     if not cfg.server or not cfg.school:
         raise ValueError(

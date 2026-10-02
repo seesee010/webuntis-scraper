@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from .browser import BrowserSession
-from .config import load_config
+from .config import DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, load_config
 from .exporter import write_json, write_latest
 from .scraper import Scraper
 from .summary import render_summary
@@ -30,16 +30,17 @@ def _setup_logging(verbose: bool, quiet: bool = False) -> None:
 
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
+        prog="untis",
         description="Scrape WebUntis data via Playwright (timetable, exams, "
                     "homework, absences, messages).",
     )
     ap.add_argument(
-        "--config", default="config.json",
-        help="Path to config.json (default: ./config.json)",
+        "--config", default=str(DEFAULT_CONFIG_PATH),
+        help=f"Path to config.json (default: {DEFAULT_CONFIG_PATH})",
     )
     ap.add_argument(
-        "--env", default=".env",
-        help="Path to .env file (default: ./.env)",
+        "--env", default=str(DEFAULT_ENV_PATH),
+        help=f"Path to .env file (default: {DEFAULT_ENV_PATH})",
     )
     ap.add_argument(
         "--no-headless", action="store_true",

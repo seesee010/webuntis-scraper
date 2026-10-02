@@ -45,9 +45,33 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+## Install as `untis` command (Linux / macOS)
+
+`bin/untis` is a small launcher that runs the scraper with the
+project's `.venv`. Link it into a directory on your `PATH`
+(`~/.local/bin` is on the `PATH` of most Linux distros):
+
+```bash
+ln -s "$PWD/bin/untis" ~/.local/bin/untis
+untis -s --days-forward 0
+```
+
 ## Configuration
 
-1. Copy `config.example.json` to `config.json` and adjust it:
+Config files are looked up in `~/.config/untis/` (or
+`$XDG_CONFIG_HOME/untis/`). Sessions, output and debug screenshots then
+go to `~/.local/share/untis/`, so `untis` works from any directory.
+Without `~/.config/untis/config.json`, the project folder is used for
+everything instead (handy on Windows or for development).
+
+1. Create the config directory and copy the example config:
+
+   ```bash
+   mkdir -p ~/.config/untis
+   cp config.example.json ~/.config/untis/config.json
+   ```
+
+   Then adjust it:
 
    ```jsonc
    {
@@ -61,7 +85,12 @@ playwright install chromium
    [webuntis.com](https://webuntis.com). The redirect URL contains
    both, e.g. `https://nese.webuntis.com/WebUntis/?school=htbla_kaindorf`.
 
-2. Copy `.env.example` to `.env` and enter your password:
+2. Put your password into `~/.config/untis/.env`:
+
+   ```bash
+   cp .env.example ~/.config/untis/.env
+   chmod 600 ~/.config/untis/.env
+   ```
 
    ```ini
    UNTIS_PASSWORD=yourPassword
@@ -93,9 +122,10 @@ plus `changed` / `cancelled` / `exam` markers. Substitutes show as
 colors). Below that come upcoming exams, open homework and a line with
 absences and unread messages. Set `NO_COLOR=1` to disable colors.
 
-Output goes to `out/untis_<timestamp>.json` and `out/latest.json`.
-Cookies are stored in `sessions/storage_state.json`, so later runs
-don't need to log in again.
+Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
+inside the data directory (`~/.local/share/untis/`, or the project
+folder). Cookies are stored in `sessions/storage_state.json` there, so
+later runs don't need to log in again.
 
 ### Login problems?
 
@@ -107,7 +137,8 @@ page`) even though your credentials are correct, check:
 2. **Special characters in the password?** `.env` supports `=` and
    quotes, but leading whitespace is trimmed.
 3. **CAPTCHA / SSO / 2FA?** → `python -m src --form-login --no-headless`
-4. **Screenshot:** `logs/login_failed.png` shows what the browser saw.
+4. **Screenshot:** `logs/login_failed.png` (in the data directory) shows
+   what the browser saw.
 5. **Verbose output:** `python -m src -v`.
 
 ## Output schema
@@ -154,11 +185,14 @@ page`) even though your credentials are correct, check:
   exams are derived from the timetable (`source: "timetable_fallback"`).
 - **Rate limit**: at most one request every 300 ms.
 - **Raw data**: without `--keep-raw`, all `raw` fields are removed.
-- **Storage**: `sessions/` and `out/` are in `.gitignore`.
+- **Storage**: in the project folder, `sessions/`, `out/`, `logs/`,
+  `config.json` and `.env` are in `.gitignore`.
 
 ## Project structure
 
 ```
+bin/
+  untis             # launcher for your PATH
 src/
   __init__.py
   main.py           # CLI

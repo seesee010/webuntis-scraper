@@ -33,14 +33,38 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+## Als `untis`-Befehl installieren (Linux / macOS)
+
+`bin/untis` startet den Scraper mit dem `.venv` des Projekts. In ein
+Verzeichnis im `PATH` verlinken (`~/.local/bin` ist bei den meisten
+Linux-Distros im `PATH`):
+
+```bash
+ln -s "$PWD/bin/untis" ~/.local/bin/untis
+untis -s --days-forward 0
+```
+
 ## Konfiguration
 
-1. `config.example.json` nach `config.json` kopieren und anpassen:
+Die Config wird in `~/.config/untis/` (bzw. `$XDG_CONFIG_HOME/untis/`)
+gesucht. Sessions, Output und Debug-Screenshots landen dann in
+`~/.local/share/untis/` - `untis` funktioniert so aus jedem Ordner.
+Ohne `~/.config/untis/config.json` wird für alles der Projektordner
+verwendet (z.B. unter Windows oder zum Entwickeln).
 
-   ```json
+1. Config-Ordner anlegen und Beispiel-Config kopieren:
+
+   ```bash
+   mkdir -p ~/.config/untis
+   cp config.example.json ~/.config/untis/config.json
+   ```
+
+   Dann anpassen:
+
+   ```jsonc
    {
-     "server": "nese",          // Subdomain vor .webuntis.com
-     "school": "htbla_kaindorf",// Wert hinter ?school=
+     "server": "nese",           // Subdomain vor .webuntis.com
+     "school": "htbla_kaindorf", // Wert hinter ?school=
      "username": "max.muster"
    }
    ```
@@ -50,7 +74,12 @@ playwright install chromium
    Redirect-URL enthält beides, z.B.
    `https://nese.webuntis.com/WebUntis/?school=htbla_kaindorf`.
 
-2. `.env.example` nach `.env` kopieren und das Passwort eintragen:
+2. Passwort in `~/.config/untis/.env` eintragen:
+
+   ```bash
+   cp .env.example ~/.config/untis/.env
+   chmod 600 ~/.config/untis/.env
+   ```
 
    ```ini
    UNTIS_PASSWORD=deinPasswort
@@ -82,8 +111,9 @@ entfernte Lehrer durchgestrichen (`~ALT~` ohne Farben). Darunter folgen
 Prüfungen, offene Hausaufgaben, Abwesenheiten und ungelesene Nachrichten.
 `NO_COLOR=1` schaltet Farben ab.
 
-Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`.
-In `sessions/storage_state.json` werden Cookies gespeichert, damit
+Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
+im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In
+`sessions/storage_state.json` werden dort Cookies gespeichert, damit
 Folge-Läufe kein erneutes Login brauchen.
 
 ### Login-Fehler?
@@ -150,6 +180,8 @@ login page`), obwohl die Credentials stimmen, prüfe:
 ## Projektstruktur
 
 ```
+bin/
+  untis             # Launcher für den PATH
 src/
   __init__.py
   main.py           # CLI
