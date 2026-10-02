@@ -97,6 +97,14 @@ python -m src --form-login --no-headless --clear-session
 # Anderes Zeitfenster
 python -m src --days-back 7 --days-forward 30
 
+# Datums-Kürzel (statt --days-back / --days-forward)
+untis -s --today
+untis -s --tomorrow        # bzw. der nächste Schultag, wenn morgen frei ist
+untis -s --next            # heute, solange Schule ist, sonst der nächste Schultag
+untis -s --week            # diese Woche, Mo–So
+untis -s --next-week
+untis -s --date 12.10.     # auch 12.10.2026 oder 2026-10-12
+
 # Rohdaten der API zusätzlich behalten
 python -m src --keep-raw -v
 
@@ -105,9 +113,25 @@ python -m src --short                   # oder -s
 python -m src -s --days-forward 0       # nur heute
 ```
 
-`--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum, markiert
-`changed` / `cancelled` / `exam`, Supplierungen als `NEU (for ALT)` und
-entfernte Lehrer durchgestrichen (`~ALT~` ohne Farben). Darunter folgen
+`--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum und markiert,
+was mit der Stunde passiert ist:
+
+| Markierung | Bedeutung |
+|---|---|
+| `cancelled` | Entfall, die Stunde findet nicht statt |
+| `removed` | die Stunde findet statt, aber deine Klasse ist ausgetragen |
+| `no teacher` | Lehrer ausgetragen, (noch) keine Supplierung |
+| `changed` | sonstige Änderung, z.B. Supplierung: `NEU (for ALT)` |
+| `exam` | Prüfung |
+| `event` | Veranstaltung, z.B. Exkursion (`★ Titel`, mit Lehrern) |
+
+Entfernte Lehrer werden durchgestrichen (`~ALT~` ohne Farben). Der
+Tageskopf zeigt, wann die Schule an dem Tag wirklich beginnt und endet,
+z.B. `Mon 05.10.  07:50–13:25`.
+
+`--tomorrow` und `--next` schauen in den echten Stundenplan: Wochenenden,
+Ferien und Tage, an denen alles entfällt, werden übersprungen; im
+Tageskopf steht dann `(next school day)`. Darunter folgen
 Prüfungen, offene Hausaufgaben, Abwesenheiten und ungelesene Nachrichten.
 `NO_COLOR=1` schaltet Farben ab.
 
@@ -130,6 +154,20 @@ login page`), obwohl die Credentials stimmen, prüfe:
 4. **Screenshot:** `logs/login_failed.png` zeigt, was der Browser sah.
 5. **Verbose-Output:** `python -m src -v`.
 
+### Exit-Codes
+
+Fehler erscheinen als eine Zeile auf stderr (`untis: login failed: …`);
+mit `-v` gibt es den vollen Traceback.
+
+| Code | Bedeutung |
+|---|---|
+| `0` | Erfolg |
+| `1` | unerwarteter Fehler (bitte melden) |
+| `2` | Config-/Setup-Problem (Config fehlt, Chromium nicht installiert) |
+| `3` | Login fehlgeschlagen |
+| `4` | WebUntis nicht erreichbar oder Fehler vom Server |
+| `130` | mit Strg-C abgebrochen |
+
 ## Output-Schema
 
 ```jsonc
@@ -141,12 +179,14 @@ login page`), obwohl die Credentials stimmen, prüfe:
   "timetable": {
     "source": "rest_v1" | "jsonrpc",
     "start": "2026-06-02", "end": "2026-06-16",
+    "own_classes": ["1AXYZ"],
     "days": [
       {"date": "2026-06-02", "entries": [
         {
           "start": "2026-06-02T08:00", "end": "2026-06-02T08:45",
           "status": "REGULAR" | "CHANGED" | "CANCELLED" | ...,
           "is_cancelled": false, "is_exam": false, "is_substitution": false,
+          "is_event": false, "is_removed": false, "no_teacher": false,
           "lesson_text": "", "subjects": [{"short":"M","long":"Math"}],
           "teachers": [{"short":"NEU","long":"...","status":"ADDED","replaces":"ALT"}],
           "classes": [...], "rooms": [...]

@@ -110,6 +110,14 @@ python -m src --form-login --no-headless --clear-session
 # Different time window
 python -m src --days-back 7 --days-forward 30
 
+# Date shortcuts (instead of --days-back / --days-forward)
+untis -s --today
+untis -s --tomorrow        # or the next school day if tomorrow is free
+untis -s --next            # today while school runs, else the next school day
+untis -s --week            # this week, Mon–Sun
+untis -s --next-week
+untis -s --date 12.10.     # also 12.10.2026 or 2026-10-12
+
 # Also keep the raw API payloads
 python -m src --keep-raw -v
 
@@ -119,9 +127,24 @@ python -m src -s --days-forward 0       # today only
 ```
 
 `--short` prints one block per school day: time, subject, teacher, room,
-plus `changed` / `cancelled` / `exam` markers. Substitutes show as
-`NEW (for OLD)`, removed teachers are struck through (`~OLD~` without
-colors). Below that come upcoming exams, open homework and a line with
+plus a marker for what happened to the lesson:
+
+| Marker | Meaning |
+|---|---|
+| `cancelled` | the lesson doesn't take place |
+| `removed` | the lesson takes place, but your class was taken out of it |
+| `no teacher` | the teacher was removed and nobody replaces them yet |
+| `changed` | something else changed, e.g. a substitute: `NEW (for OLD)` |
+| `exam` | exam lesson |
+| `event` | an event such as an excursion (`★ title`, with its teachers) |
+
+Removed teachers are struck through (`~OLD~` without colors). Each day
+header shows when school actually starts and ends that day, e.g.
+`Mon 05.10.  07:50–13:25`.
+
+`--tomorrow` and `--next` look at the real timetable, so weekends,
+holidays and days where every lesson is cancelled are skipped; the day
+header then says `(next school day)`. Below that come upcoming exams, open homework and a line with
 absences and unread messages. Set `NO_COLOR=1` to disable colors.
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
@@ -143,6 +166,20 @@ page`) even though your credentials are correct, check:
    what the browser saw.
 5. **Verbose output:** `python -m src -v`.
 
+### Exit codes
+
+Errors are reported as one line on stderr (`untis: login failed: …`);
+add `-v` for the full traceback.
+
+| Code | Meaning |
+|---|---|
+| `0` | success |
+| `1` | unexpected error (please report it) |
+| `2` | config / setup problem (missing config, Chromium not installed) |
+| `3` | login failed |
+| `4` | WebUntis unreachable or returned an error |
+| `130` | aborted with Ctrl-C |
+
 ## Output schema
 
 ```jsonc
@@ -154,12 +191,14 @@ page`) even though your credentials are correct, check:
   "timetable": {
     "source": "rest_v1" | "jsonrpc",
     "start": "2026-06-02", "end": "2026-06-16",
+    "own_classes": ["1AXYZ"],
     "days": [
       {"date": "2026-06-02", "entries": [
         {
           "start": "2026-06-02T08:00", "end": "2026-06-02T08:45",
           "status": "REGULAR" | "CHANGED" | "CANCELLED" | ...,
           "is_cancelled": false, "is_exam": false, "is_substitution": false,
+          "is_event": false, "is_removed": false, "no_teacher": false,
           "lesson_text": "", "subjects": [{"short":"M","long":"Math"}],
           "teachers": [{"short":"NEW","long":"...","status":"ADDED","replaces":"OLD"}],
           "classes": [...], "rooms": [...]

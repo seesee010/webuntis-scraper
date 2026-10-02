@@ -20,6 +20,8 @@ def _entry(start, end, subject, teachers, rooms=(), status="REGULAR", **kw):
         "subjects": [{"short": subject}] if subject else [],
         "teachers": list(teachers), "rooms": [{"short": r} for r in rooms],
         "info": kw.get("info", ""), "lesson_text": "", "substitution_text": "",
+        "is_event": kw.get("event", False), "is_removed": kw.get("removed", False),
+        "no_teacher": kw.get("no_teacher", False),
     }
 
 
@@ -75,3 +77,39 @@ def test_exams_homework_and_counts():
 def test_module_error_is_shown():
     out = render_summary(_payload(timetable={"error": "HTTP 500"}), color=False)
     assert "timetable: HTTP 500" in out
+
+
+def test_event_removed_and_no_teacher_labels():
+    tt = {"source": "rest_v1", "days": [{"date": "2026-09-30", "entries": [
+        _entry("07:50", "17:05", None, [{"short": "TCH8"}, {"short": "TCH9"}],
+               status="CHANGED", info="EVENT-NAME", event=True),
+        _entry("07:50", "08:40", "GEO", [{"short": "TCH1"}], ["R101"],
+               status="CANCELLED", cancelled=True),
+        _entry("13:25", "14:15", "ETH", [{"short": "TCH5"}], ["R102"],
+               status="CHANGED", removed=True),
+        _entry("14:20", "15:10", "PROG", [{"short": "TCH3", "status": "REMOVED"}],
+               ["R101"], status="CHANGED", no_teacher=True),
+        _entry("15:20", "16:10", "ENG",
+               [{"short": "TCH10", "status": "ADDED", "replaces": "TCH2"}],
+               ["R101"], status="CHANGED"),
+    ]}]}
+    lines = render_summary(_payload(timetable=tt), color=False).splitlines()
+    line = lambda needle: next(l for l in lines if needle in l)
+
+    assert "★ EVENT-NAME" in line("EVENT-NAME")
+    assert "TCH8, TCH9" in line("EVENT-NAME")
+    assert line("EVENT-NAME").endswith("event")
+    assert line("GEO").endswith("cancelled")
+    assert line("ETH").endswith("removed")
+    assert line("PROG").endswith("no teacher")
+    assert line("ENG").endswith("changed")     # real substitution unchanged
+
+
+def test_cancelled_wins_over_removed():
+    tt = {"source": "rest_v1", "days": [{"date": "2026-09-30", "entries": [
+        _entry("07:50", "08:40", "GEO", [{"short": "TCH1"}], status="CANCELLED",
+               cancelled=True, removed=True),
+    ]}]}
+    out = render_summary(_payload(timetable=tt), color=False)
+    assert next(l for l in out.splitlines() if "GEO" in l).endswith("cancelled")
+    assert "removed" not in out

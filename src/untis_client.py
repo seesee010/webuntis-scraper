@@ -163,6 +163,10 @@ class WebUntisError(RuntimeError):
     """Raised when WebUntis returns an error or auth fails."""
 
 
+class LoginError(WebUntisError):
+    """Raised when no logged-in session could be established."""
+
+
 class WebUntisClient:
     def __init__(self, cfg: ScraperConfig, session: BrowserSession):
         self.cfg = cfg
@@ -200,7 +204,7 @@ class WebUntisClient:
 
         await self._do_form_login()
         if not await self._probe_session():
-            raise WebUntisError(
+            raise LoginError(
                 "Form login did not produce a valid session. "
                 "Check credentials / 2FA / school+server config."
             )
@@ -240,7 +244,7 @@ class WebUntisClient:
             await user_loc.wait_for(state="visible", timeout=self.cfg.timeout_ms)
         except PWTimeout:
             await self._screenshot("login_no_form")
-            raise WebUntisError(
+            raise LoginError(
                 "Could not find login form. Run with --no-headless to debug. "
                 f"Screenshot saved to {LOGS_DIR / 'login_no_form.png'}"
             )
@@ -250,7 +254,7 @@ class WebUntisClient:
         try:
             await pw_loc.wait_for(state="visible", timeout=5_000)
         except PWTimeout:
-            raise WebUntisError("Password field not found")
+            raise LoginError("Password field not found")
         await pw_loc.fill(self.cfg.password)
 
         submit_loc = page.locator(", ".join(submit_selectors)).locator("visible=true").first
@@ -268,13 +272,13 @@ class WebUntisClient:
             )
         except PWTimeout:
             if await self._has_2fa_field():
-                raise WebUntisError(
+                raise LoginError(
                     "2FA required. Run with --no-headless and complete it once; "
                     "the session will be saved for next time."
                 )
             err_text = await self._read_error_text()
             await self._screenshot("login_failed")
-            raise WebUntisError(
+            raise LoginError(
                 f"Form login did not redirect away from the login page. "
                 f"Server message: {err_text or 'none'}. "
                 f"Screenshot: {LOGS_DIR / 'login_failed.png'}"
@@ -489,6 +493,29 @@ class WebUntisClient:
             })
             days.extend(res.get("days") or [])
         return {"days": days}
+
+    async def get_own_classes(self) -> set[str]:
+        """Short names of the classes the user belongs to (students only).
+
+        Needed to tell "your class was removed from a lesson" apart from
+        "another class was removed". Empty set if unknown.
+        """
+        if self._resource_type != "STUDENT":
+            return set()
+        pid, _ = self._require_person()
+        res = await self._rest_get("/timetable/filter", {
+            "resourceType": "STUDENT",
+            "timetableType": "MY_TIMETABLE",
+        })
+        own: set[str] = set()
+        for student in res.get("students") or []:
+            if (student.get("student") or {}).get("id") != pid:
+                continue
+            for entry in student.get("classes") or []:
+                name = (entry.get("class") or {}).get("shortName")
+                if name:
+                    own.add(name)
+        return own
 
     async def get_timetable(self, start: date, end: date) -> list[dict]:
         """Timetable from JSON-RPC `getTimetable` (fallback path)."""

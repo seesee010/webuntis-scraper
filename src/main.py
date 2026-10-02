@@ -5,14 +5,25 @@ import argparse
 import asyncio
 import logging
 import sys
+from datetime import date
 from pathlib import Path
 
+from playwright.async_api import Error as PlaywrightError
+
 from .browser import BrowserSession
-from .config import DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, load_config
+from .config import DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, ConfigError, load_config
+from .dates import parse_date, week_range
 from .exporter import write_json, write_latest
 from .scraper import Scraper
 from .summary import render_summary
-from .untis_client import WebUntisClient
+from .untis_client import LoginError, WebUntisClient, WebUntisError
+
+# Exit codes, so scripts and status bars can tell failures apart.
+EXIT_ERROR = 1      # unexpected error (bug)
+EXIT_CONFIG = 2     # missing/invalid config or setup (e.g. no Chromium)
+EXIT_LOGIN = 3      # could not log in
+EXIT_NETWORK = 4    # WebUntis unreachable or returned an error
+EXIT_ABORTED = 130  # Ctrl-C
 
 
 def _setup_logging(verbose: bool, quiet: bool = False) -> None:
@@ -33,6 +44,9 @@ def _parse_args() -> argparse.Namespace:
         prog="untis",
         description="Scrape WebUntis data via Playwright (timetable, exams, "
                     "homework, absences, messages).",
+        epilog=f"exit codes: {EXIT_ERROR} unexpected error, {EXIT_CONFIG} config/setup, "
+               f"{EXIT_LOGIN} login failed, {EXIT_NETWORK} network/WebUntis error, "
+               f"{EXIT_ABORTED} aborted",
     )
     ap.add_argument(
         "--config", default=str(DEFAULT_CONFIG_PATH),
@@ -66,12 +80,55 @@ def _parse_args() -> argparse.Namespace:
         "--days-forward", type=int, default=None,
         help="Override config: how many days in the future to scrape.",
     )
+    when = ap.add_argument_group(
+        "date shortcuts", "Pick the window directly (instead of --days-back/--days-forward).",
+    ).add_mutually_exclusive_group()
+    when.add_argument("--today", action="store_true", help="Only today.")
+    when.add_argument(
+        "--tomorrow", action="store_true",
+        help="Tomorrow, or the next school day if tomorrow has no lessons.",
+    )
+    when.add_argument(
+        "--next", action="store_true",
+        help="Today while school isn't over yet, otherwise the next school day.",
+    )
+    when.add_argument("--week", action="store_true", help="This week (Mon-Sun).")
+    when.add_argument("--next-week", action="store_true", help="Next week (Mon-Sun).")
+    when.add_argument(
+        "--date", type=_date_arg, metavar="DATE",
+        help="A specific day: YYYY-MM-DD, DD.MM.YYYY or DD.MM.",
+    )
     ap.add_argument(
         "-s", "--short", action="store_true",
         help="Print a compact per-day overview (JSON is still written).",
     )
     ap.add_argument("-v", "--verbose", action="store_true", help="Debug logging.")
-    return ap.parse_args()
+    args = ap.parse_args()
+    shortcut = (args.today or args.tomorrow or args.next or args.week
+                or args.next_week or args.date)
+    if shortcut and (args.days_back is not None or args.days_forward is not None):
+        ap.error("date shortcuts can't be combined with --days-back/--days-forward")
+    return args
+
+
+def _date_arg(text: str) -> date:
+    try:
+        return parse_date(text, date.today())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def _apply_date_shortcuts(cfg, args: argparse.Namespace, today: date) -> None:
+    if args.today:
+        cfg.start_date = cfg.end_date = today
+    elif args.date:
+        cfg.start_date = cfg.end_date = args.date
+    elif args.week or args.next_week:
+        cfg.start_date, cfg.end_date = week_range(today, 1 if args.next_week else 0)
+    elif args.tomorrow:
+        cfg.pick_day = "tomorrow"
+    elif args.next:
+        cfg.pick_day = "next"
 
 
 async def _async_main(args: argparse.Namespace) -> int:
@@ -84,11 +141,9 @@ async def _async_main(args: argparse.Namespace) -> int:
         cfg.days_back = args.days_back
     if args.days_forward is not None:
         cfg.days_forward = args.days_forward
+    _apply_date_shortcuts(cfg, args, date.today())
 
-    async with BrowserSession(cfg) as session:
-        if args.clear_session:
-            await session.clear_session()
-
+    async with BrowserSession(cfg, fresh=args.clear_session) as session:
         client = WebUntisClient(cfg, session)
         try:
             await client.login(force=args.form_login)
@@ -113,6 +168,25 @@ async def _async_main(args: argparse.Namespace) -> int:
     return 0
 
 
+def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, str]:
+    """Map an exception to (exit code, one-line message)."""
+    first_line = (str(exc).strip().splitlines() or [""])[0]
+    if isinstance(exc, ConfigError):
+        return EXIT_CONFIG, f"config error: {exc}"
+    if isinstance(exc, LoginError):
+        return EXIT_LOGIN, (f"login failed: {exc} "
+                            f"(username: {args.config}, password: {args.env})")
+    if isinstance(exc, WebUntisError):
+        return EXIT_NETWORK, f"WebUntis error: {exc}"
+    if isinstance(exc, PlaywrightError):
+        if "Executable doesn't exist" in str(exc):
+            return EXIT_CONFIG, ("Chromium is not installed for Playwright; "
+                                 "run: .venv/bin/playwright install chromium")
+        return EXIT_NETWORK, f"could not reach WebUntis: {first_line}"
+    return EXIT_ERROR, (f"unexpected error: {type(exc).__name__}: {first_line} "
+                        "(run with -v for the full traceback)")
+
+
 def main() -> int:
     args = _parse_args()
     _setup_logging(args.verbose, quiet=args.short)
@@ -120,10 +194,13 @@ def main() -> int:
         return asyncio.run(_async_main(args))
     except KeyboardInterrupt:
         print("\nAborted by user", file=sys.stderr)
-        return 130
+        return EXIT_ABORTED
     except Exception as exc:
-        logging.exception("Fatal error: %s", exc)
-        return 1
+        if args.verbose:
+            logging.exception("Fatal error")
+        code, message = _describe_error(exc, args)
+        print(f"untis: {message}", file=sys.stderr)
+        return code
 
 
 if __name__ == "__main__":

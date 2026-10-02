@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from .config import ScraperConfig
+from .dates import pick_school_day, trim_timetable
 from .normalize import (
     normalize_absence,
     normalize_exam,
@@ -20,6 +21,9 @@ from .untis_client import WebUntisClient
 
 log = logging.getLogger(__name__)
 
+# How far --tomorrow / --next look ahead for a school day (holidays!).
+PICK_SEARCH_DAYS = 21
+
 
 class Scraper:
     def __init__(self, cfg: ScraperConfig, client: WebUntisClient):
@@ -27,11 +31,17 @@ class Scraper:
         self.client = client
         self._timetable: dict[str, Any] | None = None
 
-    async def run(self) -> dict[str, Any]:
-        today = date.today()
-        start = today - timedelta(days=self.cfg.days_back)
-        end = today + timedelta(days=self.cfg.days_forward)
-        log.info("Scraping window: %s .. %s", start, end)
+    async def run(
+        self, today: date | None = None, now: datetime | None = None,
+    ) -> dict[str, Any]:
+        today = today or date.today()
+        now = now or datetime.now()
+        start, end = self._window(today)
+        note = ""
+        if self.cfg.pick_day:
+            start, note = await self._pick_day(today, now)
+            end = start
+        log.info("Scraping window: %s .. %s %s", start, end, note)
 
         result: dict[str, Any] = {
             "meta": {
@@ -42,6 +52,7 @@ class Scraper:
                 "window": {
                     "start": start.isoformat(),
                     "end": end.isoformat(),
+                    **({"note": note} if note else {}),
                 },
             }
         }
@@ -69,6 +80,33 @@ class Scraper:
 
         return result
 
+    def _window(self, today: date) -> tuple[date, date]:
+        if self.cfg.start_date:
+            return self.cfg.start_date, self.cfg.end_date or self.cfg.start_date
+        return (today - timedelta(days=self.cfg.days_back),
+                today + timedelta(days=self.cfg.days_forward))
+
+    async def _pick_day(self, today: date, now: datetime) -> tuple[date, str]:
+        """Resolve --tomorrow / --next to a concrete school day by looking
+        at the real timetable, so weekends, holidays and fully cancelled
+        days are skipped without a holiday calendar."""
+        mode = self.cfg.pick_day
+        first = today + timedelta(days=1) if mode == "tomorrow" else today
+        after = now if mode == "next" else None
+        try:
+            tt = await self._scrape_timetable(
+                first, first + timedelta(days=PICK_SEARCH_DAYS))
+        except Exception as exc:
+            log.warning("Could not look ahead for the next school day: %s", exc)
+            self._timetable = None
+            return first, ""
+        day = pick_school_day(tt, first, after)
+        if day is None:
+            self._timetable = None
+            return first, f"no lessons in the next {PICK_SEARCH_DAYS} days"
+        self._timetable = trim_timetable(tt, day, day)
+        return day, ("next school day" if day != first else "")
+
     # --- module scrapers ------------------------------------------------
 
     async def _scrape_timetable(self, start: date, end: date) -> dict[str, Any]:
@@ -78,11 +116,17 @@ class Scraper:
         try:
             grid = await self.client.get_timetable_grid(start, end)
             if grid.get("days"):
+                try:
+                    own_classes = await self.client.get_own_classes()
+                except Exception as exc:
+                    log.warning("Could not determine own class: %s", exc)
+                    own_classes = set()
                 self._timetable = {
                     "source": "rest_v1",
                     "start": start.isoformat(),
                     "end": end.isoformat(),
-                    **normalize_timetable_grid(grid),
+                    "own_classes": sorted(own_classes),
+                    **normalize_timetable_grid(grid, own_classes),
                 }
                 return self._timetable
         except Exception as exc:

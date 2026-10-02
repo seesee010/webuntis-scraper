@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,10 @@ OUT_DIR = DATA_DIR / "out"
 LOGS_DIR = DATA_DIR / "logs"
 
 
+class ConfigError(ValueError):
+    """Raised when the configuration is missing or incomplete."""
+
+
 @dataclass
 class ScraperConfig:
     # WebUntis endpoints
@@ -55,6 +60,10 @@ class ScraperConfig:
     # Date range for timetable scraping
     days_back: int = 0
     days_forward: int = 14
+    # Set by the CLI date shortcuts; override days_back/days_forward.
+    start_date: date | None = None
+    end_date: date | None = None
+    pick_day: str | None = None    # "tomorrow" | "next": first school day
 
     # Modules to enable
     scrape_timetable: bool = True
@@ -180,9 +189,9 @@ def load_config(
         cfg.output_dir = str(DATA_DIR / cfg.output_dir)
 
     if not cfg.server or not cfg.school:
-        raise ValueError(
-            "server and school must be set in config.json or .env. "
-            "See config.example.json."
+        raise ConfigError(
+            f"server and school must be set in {config_path} or {env_path} "
+            "(see config.example.json)"
         )
 
     if cfg.username and not cfg.password:
