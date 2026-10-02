@@ -28,6 +28,8 @@ from .untis_client import WebUntisClient
 
 log = logging.getLogger(__name__)
 
+# --tests without a window, if WebUntis doesn't report the school year end.
+FALLBACK_YEAR_DAYS = 365
 # How far --tomorrow / --next look ahead for a school day (holidays!).
 PICK_SEARCH_DAYS = 21
 # --days-forward/--days-back: if holidays leave too few school days in the
@@ -97,11 +99,17 @@ class Scraper:
     def _window(self, today: date) -> tuple[date, date]:
         if self.cfg.start_date:
             return self.cfg.start_date, self.cfg.end_date or self.cfg.start_date
+        if self.cfg.until_school_year_end:
+            end = getattr(self.client, "school_year_end", None)
+            if not isinstance(end, date) or end < today:
+                end = today + timedelta(days=FALLBACK_YEAR_DAYS)
+            return today, end
         return (today - timedelta(days=self.cfg.days_back),
                 today + timedelta(days=self.cfg.days_forward))
 
     def _counts_school_days(self) -> bool:
         return (not self.cfg.start_date and not self.cfg.calendar_days
+                and not self.cfg.until_school_year_end
                 and (self.cfg.days_back > 0 or self.cfg.days_forward > 0))
 
     async def _school_day_window(self, today: date) -> tuple[date, date, str]:

@@ -222,6 +222,8 @@ untis --start tomorrow           # premier cours qui a lieu demain, par ex. 07:5
 untis --end                      # fin des cours aujourd'hui
 untis --free next                # heures libres au prochain jour de cours
 untis --start tomorrow || echo "sleep in"   # code de sortie 5 = pas de cours ce jour-là
+untis --tests                    # tous les contrôles à venir jusqu'à la fin de l'année scolaire
+untis -t --days-back 30 --days-forward 0   # contrôles des 30 derniers jours de cours (avec notes)
 ```
 
 `--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
@@ -273,6 +275,8 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 ```
 
 `--start`, `--end` et `--free` répondent à une question sur un jour et n'affichent que la réponse : `today` (par défaut), `tomorrow`, `next` (le prochain jour de cours), une date ou un jour de la semaine (le prochain). Les cours annulés et ceux dont ta classe a été retirée ne comptent pas ; un premier cours annulé décale donc `--start`. Les heures libres viennent de la grille horaire de l'école. S'il n'y a pas cours ce jour-là, `-` est affiché et le code de sortie est 5. `--format json` affiche `{"date", "start", "end", "first", "free"}`. Seul l'emploi du temps est chargé, et aucun fichier JSON n'est écrit.
+
+`--tests` (aussi `-t` / `--exams`) n'affiche que les contrôles et examens, triés par date avec « in N days », la note si WebUntis en a une, et les contrôles passés grisés. Sans période, il couvre tout d'aujourd'hui à la fin de l'année scolaire (le `days_forward` de ta configuration ne s'applique pas ici) ; avec `--days-forward`, `--from`, `--week`, … seulement cette période. Seuls les examens sont chargés.
 
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y

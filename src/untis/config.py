@@ -88,6 +88,8 @@ class ScraperConfig:
     pick_day: str | None = None    # "tomorrow" | "next": first school day
     # days_back/days_forward count school days; True = plain calendar days
     calendar_days: bool = False
+    # --tests without a window: from today to the end of the school year
+    until_school_year_end: bool = False
 
     # Modules to enable
     scrape_timetable: bool = True
