@@ -11,17 +11,16 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
+def _strip_raw(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _strip_raw(v) for k, v in value.items() if k != "raw"}
+    if isinstance(value, list):
+        return [_strip_raw(v) for v in value]
+    return value
+
+
 def _maybe_strip_raw(payload: dict, keep_raw: bool) -> dict:
-    if keep_raw:
-        return payload
-    out = {}
-    for k, v in payload.items():
-        if isinstance(v, dict) and "raw" in v and k != "meta":
-            new_v = {kk: vv for kk, vv in v.items() if kk != "raw"}
-            out[k] = new_v
-        else:
-            out[k] = v
-    return out
+    return payload if keep_raw else _strip_raw(payload)
 
 
 def write_json(
