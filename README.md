@@ -45,19 +45,48 @@ mode (`navigator.webdriver`, `navigator.plugins`, `navigator.languages`, …).
 
 ### With pipx (recommended)
 
-Installs `untis` as a command in its own environment:
+[pipx](https://pipx.pypa.io) installs `untis` as a command in its own isolated environment, so it can't conflict with other Python packages.
+
+**1. Install pipx** (once):
+
+```bash
+sudo pacman -S python-pipx            # Arch / Omarchy
+sudo apt install pipx                 # Debian / Ubuntu
+brew install pipx                     # macOS
+python -m pip install --user pipx     # everything else, incl. Windows
+
+pipx ensurepath                       # adds ~/.local/bin to your PATH (open a new terminal afterwards)
+```
+
+**2. Install `untis`:**
 
 ```bash
 pipx install git+https://github.com/seesee010/webuntis-scraper
 untis --version
 ```
 
-Chromium is only needed for the browser fallback (`--transport browser`, 2FA/SSO):
+**3. Configure** your school and login, see [Configuration](#configuration). Then:
 
 ```bash
-pipx inject --include-apps webuntis-scraper playwright   # only for the browser fallback
-playwright install chromium
+untis -s --today
 ```
+
+**Optional: Chromium.** `untis` talks to WebUntis over plain HTTP and only needs a browser as a fallback (`--transport browser`, 2FA/SSO). To enable it (on Windows the path ends in `\webuntis-scraper\Scripts\playwright.exe`):
+
+```bash
+"$(pipx environment --value PIPX_LOCAL_VENVS)/webuntis-scraper/bin/playwright" install chromium
+```
+
+**Update / uninstall:**
+
+```bash
+pipx reinstall webuntis-scraper       # fetches the latest version from GitHub
+pipx uninstall webuntis-scraper
+```
+
+`pipx upgrade` doesn't update installs from GitHub (it only checks package indexes), so use `pipx reinstall`.
+
+If you also work on the code, use the setup below instead. Both want to be `~/.local/bin/untis`, so don't install both.
 
 ### From a checkout (development)
 
