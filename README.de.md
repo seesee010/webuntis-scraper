@@ -26,6 +26,17 @@ Browser-Kontext blockt. Deshalb läuft **alles** über Playwright:
 
 ## Installation
 
+Linux / macOS:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+```
+
+Windows (PowerShell):
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
