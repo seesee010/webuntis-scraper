@@ -183,6 +183,9 @@ untis -s --next            # today while school runs, else the next school day
 untis -s --week            # this week, Mon–Sun
 untis -s --next-week
 untis -s --date 12.10.     # also 12.10.2026 or 2026-10-12
+untis -s --from mon --to fri     # this school week
+untis -s --from tue --to mon     # Tue this week to Mon next week
+untis -s --to fri                # from today until Friday
 
 # Also keep the raw API payloads
 untis --keep-raw -v
@@ -191,6 +194,8 @@ untis --keep-raw -v
 untis --short                   # or -s
 untis -s --days-forward 0       # today only
 ```
+
+`--from` / `--to` accept everything `--date` does, plus `today`, `tomorrow` and weekday names in English or German (`mon`, `monday`, `mo`, `montag`, …). A weekday means this week's; if `--to` would end up before `--from`, it means next week's.
 
 `--short` prints one block per school day: time, subject, teacher, room,
 plus a marker for what happened to the lesson:

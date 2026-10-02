@@ -186,6 +186,9 @@ untis -s --next            # heute, solange Schule ist, sonst der nächste Schul
 untis -s --week            # diese Woche, Mo–So
 untis -s --next-week
 untis -s --date 12.10.     # auch 12.10.2026 oder 2026-10-12
+untis -s --from mon --to fri     # diese Schulwoche
+untis -s --from tue --to mon     # Di dieser Woche bis Mo nächster Woche
+untis -s --to fri                # ab heute bis Freitag
 
 # Rohdaten der API zusätzlich behalten
 untis --keep-raw -v
@@ -194,6 +197,8 @@ untis --keep-raw -v
 untis --short                   # oder -s
 untis -s --days-forward 0       # nur heute
 ```
+
+`--from` / `--to` verstehen alles, was `--date` versteht, dazu `today`/`heute`, `tomorrow`/`morgen` und Wochentage auf Englisch oder Deutsch (`mon`, `monday`, `mo`, `montag`, …). Ein Wochentag meint den dieser Woche; läge `--to` dadurch vor `--from`, den der nächsten Woche.
 
 `--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum und markiert,
 was mit der Stunde passiert ist:

@@ -15,7 +15,7 @@ from .browser import BrowserSession
 from .config import (
     DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, ConfigError, load_config,
 )
-from .dates import parse_date, week_range
+from .dates import parse_date, parse_day_spec, resolve_from_to, week_range
 from .exporter import write_json, write_latest
 from .scraper import Scraper
 from .summary import render_summary
@@ -42,7 +42,9 @@ def _setup_logging(verbose: bool, quiet: bool = False) -> None:
             logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None, today: date | None = None) -> argparse.Namespace:
+    """`argv`/`today` default to sys.argv / the real date (set in tests)."""
+    today = today or date.today()
     ap = argparse.ArgumentParser(
         prog="untis",
         description="Your WebUntis timetable, exams, homework, absences and "
@@ -96,9 +98,10 @@ def _parse_args() -> argparse.Namespace:
         "--calendar-days", action="store_true",
         help="Count --days-back/--days-forward in calendar days instead of school days.",
     )
-    when = ap.add_argument_group(
+    dates_group = ap.add_argument_group(
         "date shortcuts", "Pick the window directly (instead of --days-back/--days-forward).",
-    ).add_mutually_exclusive_group()
+    )
+    when = dates_group.add_mutually_exclusive_group()
     when.add_argument("--today", action="store_true", help="Only today.")
     when.add_argument(
         "--tomorrow", action="store_true",
@@ -114,16 +117,36 @@ def _parse_args() -> argparse.Namespace:
         "--date", type=_date_arg, metavar="DATE",
         help="A specific day: YYYY-MM-DD, DD.MM.YYYY or DD.MM.",
     )
+    dates_group.add_argument(
+        "--from", dest="from_", type=_day_spec_arg, metavar="DAY",
+        help="Start of the window: a date, today/tomorrow, or a weekday "
+             "(mon..sun, mo..so; this week).",
+    )
+    dates_group.add_argument(
+        "--to", type=_day_spec_arg, metavar="DAY",
+        help="End of the window (same formats). A weekday that would be before "
+             "--from means next week's. Without --from: from today.",
+    )
     ap.add_argument(
         "-s", "--short", action="store_true",
         help="Print a compact per-day overview (JSON is still written).",
     )
     ap.add_argument("-v", "--verbose", action="store_true", help="Debug logging.")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     shortcut = (args.today or args.tomorrow or args.next or args.week
                 or args.next_week or args.date)
-    if shortcut and (args.days_back is not None or args.days_forward is not None):
+    from_to = args.from_ is not None or args.to is not None
+    days = args.days_back is not None or args.days_forward is not None
+    if (shortcut or from_to) and days:
         ap.error("date shortcuts can't be combined with --days-back/--days-forward")
+    if from_to and shortcut:
+        ap.error("--from/--to can't be combined with other date shortcuts")
+    args.window = None
+    if from_to:
+        try:
+            args.window = resolve_from_to(args.from_, args.to, today)
+        except ValueError as exc:
+            ap.error(str(exc))
     return args
 
 
@@ -137,6 +160,16 @@ def _non_negative_int(text: str) -> int:
     return value
 
 
+def _day_spec_arg(text: str) -> str:
+    """argparse type for --from/--to: validate the syntax early (the window
+    itself is resolved after parsing, when both values are known)."""
+    try:
+        parse_day_spec(text, date.today())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+    return text
+
+
 def _date_arg(text: str) -> date:
     try:
         return parse_date(text, date.today())
@@ -145,7 +178,9 @@ def _date_arg(text: str) -> date:
 
 
 def _apply_date_shortcuts(cfg, args: argparse.Namespace, today: date) -> None:
-    if args.today:
+    if getattr(args, "window", None):
+        cfg.start_date, cfg.end_date = args.window
+    elif args.today:
         cfg.start_date = cfg.end_date = today
     elif args.date:
         cfg.start_date = cfg.end_date = args.date

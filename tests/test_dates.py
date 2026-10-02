@@ -133,3 +133,59 @@ def test_merge_timetables_lessons():
     a = {"start": "2026-10-01", "end": "2026-10-01", "lessons": [{"date": "2026-10-01"}]}
     b = {"start": "2026-10-02", "end": "2026-10-02", "lessons": [{"date": "2026-10-02"}]}
     assert len(merge_timetables(a, b)["lessons"]) == 2
+
+
+# --- --from / --to (#43) --------------------------------------------------
+from untis.dates import WEEKDAY_NAMES, parse_day_spec, resolve_from_to  # noqa: E402
+
+WED = date(2026, 10, 7)
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("mon", ("weekday", 0)), ("Monday", ("weekday", 0)), ("MO", ("weekday", 0)),
+    ("montag", ("weekday", 0)), ("tues", ("weekday", 1)), ("di", ("weekday", 1)),
+    ("mi", ("weekday", 2)), ("thurs", ("weekday", 3)), ("do", ("weekday", 3)),
+    ("Fr.", ("weekday", 4)), ("sa", ("weekday", 5)), ("Sonntag", ("weekday", 6)),
+    ("today", ("date", WED)), ("heute", ("date", WED)),
+    ("tomorrow", ("date", date(2026, 10, 8))), ("Morgen", ("date", date(2026, 10, 8))),
+    ("12.10.", ("date", date(2026, 10, 12))), ("2026-11-02", ("date", date(2026, 11, 2))),
+])
+def test_parse_day_spec(text, expected):
+    assert parse_day_spec(text, WED) == expected
+
+
+@pytest.mark.parametrize("text", ["someday", "", "32.10.", "montags", "8"])
+def test_parse_day_spec_rejects(text):
+    with pytest.raises(ValueError, match="invalid day"):
+        parse_day_spec(text, WED)
+
+
+def test_weekday_names_cover_every_day_in_both_languages():
+    assert sorted(set(WEEKDAY_NAMES.values())) == list(range(7))
+    for en, de, i in [("monday", "montag", 0), ("sunday", "sonntag", 6)]:
+        assert WEEKDAY_NAMES[en] == WEEKDAY_NAMES[de] == i
+
+
+@pytest.mark.parametrize("frm, to, start, end", [
+    ("tue", "mon", date(2026, 10, 6), date(2026, 10, 12)),     # example from the issue
+    ("mon", "fri", date(2026, 10, 5), date(2026, 10, 9)),      # whole school week
+    ("mon", None, date(2026, 10, 5), date(2026, 10, 5)),       # past weekday, this week
+    (None, "fri", WED, date(2026, 10, 9)),                     # from today
+    (None, "mon", WED, date(2026, 10, 12)),                    # --to before today -> next week
+    (None, "wed", WED, WED),                                   # same day
+    ("today", "tomorrow", WED, date(2026, 10, 8)),
+    ("12.11.", "fri", date(2026, 11, 12), date(2026, 11, 13)), # far start: first Fri after it
+    ("sun", "sat", date(2026, 10, 11), date(2026, 10, 17)),
+])
+def test_resolve_from_to(frm, to, start, end):
+    assert resolve_from_to(frm, to, WED) == (start, end)
+
+
+def test_resolve_from_to_explicit_end_before_start():
+    with pytest.raises(ValueError, match="before --from"):
+        resolve_from_to("16.10.", "12.10.", WED)
+
+
+def test_resolve_from_to_needs_something():
+    with pytest.raises(ValueError):
+        resolve_from_to(None, None, WED)

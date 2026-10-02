@@ -133,3 +133,39 @@ class TestDayCountArgs:
         assert args.calendar_days is True and args.days_forward == 4
         monkeypatch.setattr(sys, "argv", ["untis"])
         assert main_mod._parse_args().calendar_days is False
+
+
+class TestFromTo:
+    WED = __import__("datetime").date(2026, 10, 7)
+
+    def test_window_resolved_with_given_today(self):
+        args = main_mod._parse_args(["--from", "tue", "--to", "mon"], today=self.WED)
+        assert [d.isoformat() for d in args.window] == ["2026-10-06", "2026-10-12"]
+
+    def test_no_from_to_means_no_window(self):
+        assert main_mod._parse_args([], today=self.WED).window is None
+
+    def test_window_is_applied_to_config(self):
+        from untis.config import ScraperConfig
+        cfg = ScraperConfig(days_forward=14)
+        args = main_mod._parse_args(["--to", "fri"], today=self.WED)
+        main_mod._apply_date_shortcuts(cfg, args, self.WED)
+        assert (cfg.start_date.isoformat(), cfg.end_date.isoformat()) == ("2026-10-07", "2026-10-09")
+
+    @pytest.mark.parametrize("argv", [
+        ["--from", "someday"],
+        ["--from", "16.10.", "--to", "12.10."],
+        ["--from", "mon", "--today"],
+        ["--to", "fri", "--week"],
+        ["--from", "mon", "--days-forward", "3"],
+    ])
+    def test_usage_errors_exit_2(self, capsys, argv):
+        with pytest.raises(SystemExit) as exc:
+            main_mod._parse_args(argv, today=self.WED)
+        assert exc.value.code == 2
+
+    def test_day_spec_arg(self):
+        import argparse
+        assert main_mod._day_spec_arg("Montag") == "Montag"
+        with pytest.raises(argparse.ArgumentTypeError, match="invalid day"):
+            main_mod._day_spec_arg("nope")
