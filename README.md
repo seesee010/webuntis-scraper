@@ -143,6 +143,20 @@ page`) even though your credentials are correct, check:
    what the browser saw.
 5. **Verbose output:** `python -m src -v`.
 
+### Exit codes
+
+Errors are reported as one line on stderr (`untis: login failed: …`);
+add `-v` for the full traceback.
+
+| Code | Meaning |
+|---|---|
+| `0` | success |
+| `1` | unexpected error (please report it) |
+| `2` | config / setup problem (missing config, Chromium not installed) |
+| `3` | login failed |
+| `4` | WebUntis unreachable or returned an error |
+| `130` | aborted with Ctrl-C |
+
 ## Output schema
 
 ```jsonc

@@ -7,12 +7,21 @@ import logging
 import sys
 from pathlib import Path
 
+from playwright.async_api import Error as PlaywrightError
+
 from .browser import BrowserSession
-from .config import DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, load_config
+from .config import DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, ConfigError, load_config
 from .exporter import write_json, write_latest
 from .scraper import Scraper
 from .summary import render_summary
-from .untis_client import WebUntisClient
+from .untis_client import LoginError, WebUntisClient, WebUntisError
+
+# Exit codes, so scripts and status bars can tell failures apart.
+EXIT_ERROR = 1      # unexpected error (bug)
+EXIT_CONFIG = 2     # missing/invalid config or setup (e.g. no Chromium)
+EXIT_LOGIN = 3      # could not log in
+EXIT_NETWORK = 4    # WebUntis unreachable or returned an error
+EXIT_ABORTED = 130  # Ctrl-C
 
 
 def _setup_logging(verbose: bool, quiet: bool = False) -> None:
@@ -33,6 +42,9 @@ def _parse_args() -> argparse.Namespace:
         prog="untis",
         description="Scrape WebUntis data via Playwright (timetable, exams, "
                     "homework, absences, messages).",
+        epilog=f"exit codes: {EXIT_ERROR} unexpected error, {EXIT_CONFIG} config/setup, "
+               f"{EXIT_LOGIN} login failed, {EXIT_NETWORK} network/WebUntis error, "
+               f"{EXIT_ABORTED} aborted",
     )
     ap.add_argument(
         "--config", default=str(DEFAULT_CONFIG_PATH),
@@ -110,6 +122,25 @@ async def _async_main(args: argparse.Namespace) -> int:
     return 0
 
 
+def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, str]:
+    """Map an exception to (exit code, one-line message)."""
+    first_line = (str(exc).strip().splitlines() or [""])[0]
+    if isinstance(exc, ConfigError):
+        return EXIT_CONFIG, f"config error: {exc}"
+    if isinstance(exc, LoginError):
+        return EXIT_LOGIN, (f"login failed: {exc} "
+                            f"(username: {args.config}, password: {args.env})")
+    if isinstance(exc, WebUntisError):
+        return EXIT_NETWORK, f"WebUntis error: {exc}"
+    if isinstance(exc, PlaywrightError):
+        if "Executable doesn't exist" in str(exc):
+            return EXIT_CONFIG, ("Chromium is not installed for Playwright; "
+                                 "run: .venv/bin/playwright install chromium")
+        return EXIT_NETWORK, f"could not reach WebUntis: {first_line}"
+    return EXIT_ERROR, (f"unexpected error: {type(exc).__name__}: {first_line} "
+                        "(run with -v for the full traceback)")
+
+
 def main() -> int:
     args = _parse_args()
     _setup_logging(args.verbose, quiet=args.short)
@@ -117,10 +148,13 @@ def main() -> int:
         return asyncio.run(_async_main(args))
     except KeyboardInterrupt:
         print("\nAborted by user", file=sys.stderr)
-        return 130
+        return EXIT_ABORTED
     except Exception as exc:
-        logging.exception("Fatal error: %s", exc)
-        return 1
+        if args.verbose:
+            logging.exception("Fatal error")
+        code, message = _describe_error(exc, args)
+        print(f"untis: {message}", file=sys.stderr)
+        return code
 
 
 if __name__ == "__main__":

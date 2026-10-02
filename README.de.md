@@ -130,6 +130,20 @@ login page`), obwohl die Credentials stimmen, prüfe:
 4. **Screenshot:** `logs/login_failed.png` zeigt, was der Browser sah.
 5. **Verbose-Output:** `python -m src -v`.
 
+### Exit-Codes
+
+Fehler erscheinen als eine Zeile auf stderr (`untis: login failed: …`);
+mit `-v` gibt es den vollen Traceback.
+
+| Code | Bedeutung |
+|---|---|
+| `0` | Erfolg |
+| `1` | unerwarteter Fehler (bitte melden) |
+| `2` | Config-/Setup-Problem (Config fehlt, Chromium nicht installiert) |
+| `3` | Login fehlgeschlagen |
+| `4` | WebUntis nicht erreichbar oder Fehler vom Server |
+| `130` | mit Strg-C abgebrochen |
+
 ## Output-Schema
 
 ```jsonc
