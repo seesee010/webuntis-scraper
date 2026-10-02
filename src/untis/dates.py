@@ -119,3 +119,77 @@ def merge_timetables(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     if isinstance(a.get("raw"), dict) and isinstance(b.get("raw"), dict):
         out["raw"] = {"days": (a["raw"].get("days") or []) + (b["raw"].get("days") or [])}
     return out
+
+
+# --- --from / --to (#43) ---------------------------------------------------
+WEEKDAY_NAMES: dict[str, int] = {}
+for _i, _names in enumerate([
+    ("mon", "monday", "mo", "montag"),
+    ("tue", "tues", "tuesday", "di", "dienstag"),
+    ("wed", "wednesday", "mi", "mittwoch"),
+    ("thu", "thur", "thurs", "thursday", "do", "donnerstag"),
+    ("fri", "friday", "fr", "freitag"),
+    ("sat", "saturday", "sa", "samstag"),
+    ("sun", "sunday", "so", "sonntag"),
+]):
+    for _n in _names:
+        WEEKDAY_NAMES[_n] = _i
+
+RELATIVE_DAYS = {"today": 0, "heute": 0, "tomorrow": 1, "morgen": 1}
+
+
+def parse_day_spec(text: str, today: date) -> tuple[str, date | int]:
+    """Parse a --from/--to value.
+
+    Returns ("date", <date>) for dates, today/tomorrow (also German), or
+    ("weekday", 0..6) for weekday names (English/German, short or long,
+    any case). Raises ValueError for anything else.
+    """
+    key = text.strip().lower().rstrip(".")
+    if key in RELATIVE_DAYS:
+        return "date", today + timedelta(days=RELATIVE_DAYS[key])
+    if key in WEEKDAY_NAMES:
+        return "weekday", WEEKDAY_NAMES[key]
+    try:
+        return "date", parse_date(text, today)
+    except ValueError:
+        raise ValueError(
+            f"invalid day {text!r} (use a date like 12.10. / 2026-10-12, "
+            "today, tomorrow, or a weekday like mon / montag)"
+        ) from None
+
+
+def resolve_from_to(
+    from_text: str | None, to_text: str | None, today: date,
+) -> tuple[date, date]:
+    """Turn --from/--to into a (start, end) window.
+
+    - A weekday for --from means that day of the current week (Mon-Sun),
+      even if it already passed.
+    - A weekday for --to means that day of the current week, unless that
+      is before the start; then the next week(s).
+    - Only --from: that single day. Only --to: from today.
+    - An explicit --to before --from is an error.
+    """
+    if from_text is None and to_text is None:
+        raise ValueError("--from or --to is required")
+    monday = today - timedelta(days=today.weekday())
+
+    if from_text is None:
+        start = today
+    else:
+        kind, value = parse_day_spec(from_text, today)
+        start = monday + timedelta(days=value) if kind == "weekday" else value
+
+    if to_text is None:
+        return start, start
+    kind, value = parse_day_spec(to_text, today)
+    if kind == "weekday":
+        end = monday + timedelta(days=value)
+        while end < start:
+            end += timedelta(days=7)
+    else:
+        end = value
+        if end < start:
+            raise ValueError(f"--to ({end:%d.%m.%Y}) is before --from ({start:%d.%m.%Y})")
+    return start, end

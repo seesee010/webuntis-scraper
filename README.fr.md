@@ -188,6 +188,9 @@ untis -s --next            # aujourd'hui tant qu'il y a cours, sinon le prochain
 untis -s --week            # cette semaine, du lundi au dimanche
 untis -s --next-week
 untis -s --date 12.10.     # aussi 12.10.2026 ou 2026-10-12
+untis -s --from mon --to fri     # cette semaine de cours
+untis -s --from tue --to mon     # du mar. de cette semaine au lun. suivant
+untis -s --to fri                # d'aujourd'hui à vendredi
 
 # Conserver aussi les données brutes de l'API
 untis --keep-raw -v
@@ -196,6 +199,8 @@ untis --keep-raw -v
 untis --short                   # ou -s
 untis -s --days-forward 0       # seulement aujourd'hui
 ```
+
+`--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
 
 `--short` affiche un bloc par jour de cours : heure, matière, enseignant, salle, et une
 indication de ce qui est arrivé au cours :

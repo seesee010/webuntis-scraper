@@ -179,6 +179,9 @@ untis -s --next            # 今天还有课就显示今天，否则显示下一
 untis -s --week            # 本周（周一到周日）
 untis -s --next-week
 untis -s --date 12.10.     # 也可以写 12.10.2026 或 2026-10-12
+untis -s --from mon --to fri     # 本周的上课日
+untis -s --from tue --to mon     # 本周二到下周一
+untis -s --to fri                # 从今天到周五
 
 # 同时保留 API 的原始数据
 untis --keep-raw -v
@@ -187,6 +190,8 @@ untis --keep-raw -v
 untis --short                   # 或 -s
 untis -s --days-forward 0       # 只看今天
 ```
+
+`--from` / `--to` 支持 `--date` 的所有格式，另外还支持 `today`、`tomorrow` 以及英文或德文的星期名称（`mon`、`monday`、`mo`、`montag` 等）。星期名称指本周的那一天；如果这样 `--to` 会早于 `--from`，则指下周的那一天。
 
 `--short` 为每个上课日显示一块内容：时间、科目、老师、教室，以及这节课发生了什么：
 
