@@ -85,10 +85,7 @@ async def _async_main(args: argparse.Namespace) -> int:
     if args.days_forward is not None:
         cfg.days_forward = args.days_forward
 
-    async with BrowserSession(cfg) as session:
-        if args.clear_session:
-            await session.clear_session()
-
+    async with BrowserSession(cfg, fresh=args.clear_session) as session:
         client = WebUntisClient(cfg, session)
         try:
             await client.login(force=args.form_login)

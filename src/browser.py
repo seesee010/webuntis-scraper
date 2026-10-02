@@ -39,8 +39,11 @@ def _build_stealth() -> Stealth:
 class BrowserSession:
     """Context manager wrapping a stealthy Playwright Chromium session."""
 
-    def __init__(self, cfg: ScraperConfig):
+    def __init__(self, cfg: ScraperConfig, fresh: bool = False):
+        """`fresh=True` discards the saved session before the browser
+        context is created, forcing a new login."""
         self.cfg = cfg
+        self.fresh = fresh
         self._pw: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
@@ -60,6 +63,12 @@ class BrowserSession:
         )
 
         state_path = Path(self.cfg.storage_state_path)
+        if self.fresh and state_path.exists():
+            # Must happen before new_context(): once the cookies are
+            # loaded into the context, deleting the file has no effect
+            # (and __aexit__ would write them back).
+            state_path.unlink()
+            log.info("Cleared saved session %s", state_path)
         storage_state = state_path if state_path.exists() else None
 
         self.context = await self.browser.new_context(
@@ -96,9 +105,3 @@ class BrowserSession:
         page = await self.context.new_page()
         page.set_default_timeout(self.cfg.timeout_ms)
         return page
-
-    async def clear_session(self) -> None:
-        path = Path(self.cfg.storage_state_path)
-        if path.exists():
-            path.unlink()
-            log.info("Cleared saved session %s", path)
