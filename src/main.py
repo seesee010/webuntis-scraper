@@ -8,10 +8,12 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from playwright.async_api import Error as PlaywrightError
+import httpx
 
 from .browser import BrowserSession
-from .config import DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, ConfigError, load_config
+from .config import (
+    DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, ConfigError, load_config,
+)
 from .dates import parse_date, week_range
 from .exporter import write_json, write_latest
 from .scraper import Scraper
@@ -63,6 +65,11 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--form-login", action="store_true",
         help="Ignore the saved session and always log in through the form.",
+    )
+    ap.add_argument(
+        "--transport", choices=TRANSPORTS, default=None,
+        help="How to talk to WebUntis: 'auto' (default) uses plain HTTP and "
+             "only starts a browser if that fails; 'http'; 'browser'.",
     )
     ap.add_argument(
         "--clear-session", action="store_true",
@@ -137,6 +144,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         cfg.headless = False
     if args.keep_raw:
         cfg.include_raw = True
+    if args.transport:
+        cfg.transport = args.transport
     if args.days_back is not None:
         cfg.days_back = args.days_back
     if args.days_forward is not None:
@@ -178,6 +187,9 @@ def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, 
                             f"(username: {args.config}, password: {args.env})")
     if isinstance(exc, WebUntisError):
         return EXIT_NETWORK, f"WebUntis error: {exc}"
+    if isinstance(exc, httpx.TransportError):
+        return EXIT_NETWORK, f"could not reach WebUntis: {type(exc).__name__}: {first_line}"
+    from playwright.async_api import Error as PlaywrightError   # lazy: slow import
     if isinstance(exc, PlaywrightError):
         if "Executable doesn't exist" in str(exc):
             return EXIT_CONFIG, ("Chromium is not installed for Playwright; "

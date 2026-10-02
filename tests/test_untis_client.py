@@ -40,6 +40,7 @@ def cfg() -> Any:
         password="s3cret",
         headless=True,
         timeout_ms=10_000,
+        transport="browser",   # these tests drive a fake Playwright page
     )
 cfg_ = cfg  # alias for the parametrize trick below
 

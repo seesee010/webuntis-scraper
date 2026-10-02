@@ -41,6 +41,9 @@ OUT_DIR = DATA_DIR / "out"
 LOGS_DIR = DATA_DIR / "logs"
 
 
+TRANSPORTS = ("auto", "http", "browser")
+
+
 class ConfigError(ValueError):
     """Raised when the configuration is missing or incomplete."""
 
@@ -71,6 +74,9 @@ class ScraperConfig:
     scrape_homework: bool = True
     scrape_absences: bool = True
     scrape_messages: bool = True
+
+    # "auto": plain HTTP, browser only as fallback; "http"; "browser"
+    transport: str = "auto"
 
     # Browser behaviour
     headless: bool = True
@@ -182,6 +188,11 @@ def load_config(
             log.debug("Unknown config key: %s", k)
 
     cfg.derived_urls()
+
+    if cfg.transport not in TRANSPORTS:
+        raise ConfigError(
+            f"transport must be one of {', '.join(TRANSPORTS)}, not {cfg.transport!r}"
+        )
 
     # A relative output_dir ("out") means relative to the data dir, not
     # to wherever the command happens to be run from.

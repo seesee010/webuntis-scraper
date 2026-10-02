@@ -4,28 +4,42 @@
 
 🇬🇧 [English](README.md) · 🇩🇪 [Deutsch](README.de.md) · 🇫🇷 [Français](README.fr.md) · 🇨🇳 [中文](README.zh.md)
 
-Playwright-based scraper for WebUntis. Fetches your timetable, exams,
+Scraper for WebUntis (plain HTTP, with Playwright as a fallback). Fetches your timetable, exams,
 homework, absences and messages and saves them as structured JSON.
 
 ## How it works
 
-The JSON-RPC endpoint sits behind a WAF that blocks requests without a
-real browser context. That's why **everything** runs through Playwright:
+By default (`--transport auto`) no browser is needed:
 
-1. **Login** through the real login form (only needed when there is no
-   valid session in `sessions/storage_state.json`).
+1. **Login** by posting the WebUntis login form over plain HTTP
+   (`/WebUntis/j_spring_security_check`), only when the saved session
+   in `sessions/storage_state.json` has expired. WebUntis ends idle
+   sessions after a while (~40 min observed), so this happens often.
 2. **Session check**: `GET /WebUntis/api/token/new` only returns a JWT
    for a logged-in session. It provides the `person_id` and role.
-3. **All API calls** run in the browser via `page.evaluate(fetch(...))`:
-   - Timetable: REST v1 `/api/rest/view/v1/timetable/entries`
-     (needs the JWT as Bearer token), fallback JSON-RPC `getTimetable`
+3. **API calls** with the session cookie (and the JWT as Bearer token
+   for REST v1):
+   - Timetable: REST v1 `/api/rest/view/v1/timetable/entries`,
+     fallback JSON-RPC `getTimetable`
    - Exams: `/api/exams`
    - Homework: `/api/homeworks/lessons`
    - Absences: `/api/classreg/absences/students`
    - Messages: REST v1 `/api/rest/view/v1/messages`
 
-`playwright-stealth` patches common bot-detection vectors
-(`navigator.webdriver`, `navigator.plugins`, `navigator.languages`, …).
+If the HTTP login gets an unexpected answer (e.g. a WAF block, 2FA or
+SSO), `untis` falls back to a real **Chromium via Playwright**: it fills
+in the login form and runs the API calls inside the page. Wrong
+credentials are *not* retried in the browser (that would just be a
+second failed login). Both transports share the same session file.
+
+| `--transport` | Behaviour |
+|---|---|
+| `auto` (default) | HTTP, browser only as fallback |
+| `http` | HTTP only, never starts a browser |
+| `browser` | always Playwright (also implied by `--no-headless`) |
+
+`playwright-stealth` patches common bot-detection vectors in browser
+mode (`navigator.webdriver`, `navigator.plugins`, `navigator.languages`, …).
 
 ## Installation
 
@@ -163,7 +177,7 @@ page`) even though your credentials are correct, check:
    the redirect URL is `https://<server>.webuntis.com/WebUntis/?school=<slug>`.
 2. **Special characters in the password?** `.env` supports `=` and
    quotes, but leading whitespace is trimmed.
-3. **CAPTCHA / SSO / 2FA?** → `python -m src --form-login --no-headless`
+3. **CAPTCHA / SSO / 2FA?** → `untis --transport browser --no-headless --form-login`
 4. **Screenshot:** `logs/login_failed.png` (in the data directory) shows
    what the browser saw.
 5. **Verbose output:** `python -m src -v`.
@@ -241,7 +255,8 @@ src/
   main.py           # CLI
   config.py         # load config.json + .env
   browser.py        # Playwright + stealth
-  untis_client.py   # login + session check + in-browser API calls
+  http_transport.py # plain HTTP login + requests (default)
+  untis_client.py   # login (HTTP or browser) + session check + API calls
   normalize.py      # raw data -> clean dicts
   scraper.py        # orchestration
   exporter.py       # JSON output

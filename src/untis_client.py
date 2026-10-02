@@ -7,14 +7,20 @@ endpoint. Direct calls from `httpx` (no `Origin`/`Referer`/browser-bound
 cookies) are rejected with `HTTP 403 — Your input contains code that
 does not match the security policy`.
 
-**Fix:** do everything through the real browser.
+Two transports (`cfg.transport`, default "auto"):
 
-1. **Login** goes through the actual form (the WAF only protects the
-   JSON-RPC endpoint, not the form-login endpoint).
-2. **All subsequent API calls** are made via `page.evaluate(fetch(...))`,
-   so the browser handles `Origin`, `Referer` and cookies automatically.
-3. **`storage_state` is reused** between runs, so the form login is
-   only needed once (or after session expiry).
+- **HTTP** (`http_transport.py`, no browser): log in by POSTing the
+  login form (`j_spring_security_check`, not blocked by the WAF) and
+  call every endpoint with the session cookie. Fast (well under a
+  second instead of 2-12 s for Chromium + form login).
+- **Browser** (Playwright): fill in the real login form and run API
+  calls via `page.evaluate(fetch(...))`. Used for `--transport browser`,
+  `--no-headless`, and as a fallback in "auto" mode when the HTTP login
+  gets an unexpected answer (WAF, 2FA, SSO, ...).
+
+Both read and write the same `storage_state` file, so a session from
+one transport is reused by the other. Sessions expire on the server
+after a while of inactivity (~40 min observed), so most runs log in.
 
 Which API serves what (verified against a live UI2020 instance):
 
@@ -39,11 +45,16 @@ import uuid
 from datetime import date
 from typing import Any, Optional
 
-from playwright.async_api import Page
-from playwright.async_api import TimeoutError as PWTimeout
+from typing import TYPE_CHECKING
+
+import httpx
 
 from .browser import BrowserSession
 from .config import LOGS_DIR, ScraperConfig
+from .http_transport import HttpTransport
+
+if TYPE_CHECKING:       # Playwright is imported lazily (slow import)
+    from playwright.async_api import Page
 
 log = logging.getLogger(__name__)
 
@@ -172,6 +183,8 @@ class WebUntisClient:
         self.cfg = cfg
         self.session = session
         self._page: Optional[Page] = None
+        self._http: Optional[HttpTransport] = None
+        self._http_factory = HttpTransport      # replaced in tests
         self._person_id: Optional[int] = None
         self._person_type: Optional[int] = None
         self._resource_type: Optional[str] = None
@@ -185,12 +198,53 @@ class WebUntisClient:
     # ------------------------------------------------------------------
     # Login
     # ------------------------------------------------------------------
+    def _transport_mode(self) -> str:
+        # A visible browser means the user wants to watch/interact.
+        if not self.cfg.headless:
+            return "browser"
+        return self.cfg.transport
+
     async def login(self, force: bool = False) -> None:
         if self._logged_in and not force:
             return
-        assert self.session.context is not None
+        mode = self._transport_mode()
+        if mode != "browser":
+            try:
+                await self._login_http(force)
+                return
+            except (LoginError, httpx.TransportError):
+                # Rejected credentials: a browser retry would just be a
+                # second failed attempt (lockout risk). Network errors
+                # would fail in the browser too.
+                await self._close_http(save=False)
+                raise
+            except WebUntisError as exc:
+                await self._close_http(save=False)
+                if mode == "http":
+                    raise LoginError(f"HTTP login failed: {exc}") from exc
+                log.info("HTTP login not possible (%s); falling back to the browser", exc)
+        await self._login_browser(force)
 
+    async def _login_http(self, force: bool) -> None:
+        self._http = self._http_factory(self.cfg, load_saved=not force)
+        if not force and await self._probe_session():
+            log.info("Reusing existing session (HTTP)")
+            self._logged_in = True
+            return
+        outcome, detail = await self._http.form_login(self.cfg.username, self.cfg.password)
+        if outcome == "rejected":
+            raise LoginError(
+                "WebUntis rejected the username or password. If your account "
+                "uses 2FA or SSO, try --transport browser --no-headless"
+            )
+        if outcome != "ok" or not await self._probe_session():
+            raise WebUntisError(f"unexpected login response ({detail})")
+        log.info("Login successful via HTTP")
+        self._logged_in = True
+
+    async def _login_browser(self, force: bool) -> None:
         self._page = await self.session.new_page()
+        assert self.session.context is not None
 
         if force:
             # Drop the saved session, otherwise WebUntis redirects the
@@ -212,6 +266,7 @@ class WebUntisClient:
         log.info("Login successful via form")
 
     async def _do_form_login(self) -> None:
+        from playwright.async_api import TimeoutError as PWTimeout
         assert self._page is not None
         page = self._page
         await page.goto(self.cfg.login_url, wait_until="domcontentloaded")
@@ -320,10 +375,11 @@ class WebUntisClient:
         Fetches a JWT (only issued to authenticated sessions) and reads
         the person id/role from it, then the display name from /app/data.
         """
-        assert self._page is not None
-        await self._page.goto(
-            f"{self.cfg.base_url}{ANCHOR_PATH}", wait_until="domcontentloaded",
-        )
+        if self._http is None:
+            assert self._page is not None
+            await self._page.goto(
+                f"{self.cfg.base_url}{ANCHOR_PATH}", wait_until="domcontentloaded",
+            )
         try:
             await self._refresh_token()
         except WebUntisError as exc:
@@ -370,12 +426,8 @@ class WebUntisClient:
         return True
 
     async def _refresh_token(self) -> None:
-        assert self._page is not None
         await self._throttle()
-        result = await self._page.evaluate(
-            _GET_JS,
-            {"url": f"{self.cfg.base_url}{TOKEN_PATH}", "params": {}, "token": None},
-        )
+        result = await self._send_get(f"{self.cfg.base_url}{TOKEN_PATH}", {}, None)
         token = (result.get("raw") or "").strip()
         if not result["ok"] or _decode_jwt_claims(token) is None:
             self._token = None
@@ -397,8 +449,22 @@ class WebUntisClient:
             await asyncio.sleep(self._min_interval - elapsed)
         self._last_request_ts = time.monotonic()
 
-    async def _rpc_via_browser(self, method: str, params: dict) -> Any:
+    async def _send_get(self, url: str, params: dict, token: Optional[str]) -> dict[str, Any]:
+        """GET via the active transport -> {status, ok, data, raw}."""
+        if self._http is not None:
+            return await self._http.get(url, params, token)
         assert self._page is not None
+        return await self._page.evaluate(
+            _GET_JS, {"url": url, "params": params, "token": token})
+
+    async def _send_post(self, url: str, body: dict) -> dict[str, Any]:
+        """JSON POST via the active transport -> {status, ok, data, raw}."""
+        if self._http is not None:
+            return await self._http.post_json(url, body)
+        assert self._page is not None
+        return await self._page.evaluate(_FETCH_JS, {"url": url, "body": body})
+
+    async def _rpc_call(self, method: str, params: dict) -> Any:
         await self._throttle()
         url = f"{self.cfg.base_url}{JSONRPC_PATH}?school={self.cfg.school}"
         body = {
@@ -407,7 +473,7 @@ class WebUntisClient:
             "params": params,
             "jsonrpc": "2.0",
         }
-        result = await self._page.evaluate(_FETCH_JS, {"url": url, "body": body})
+        result = await self._send_post(url, body)
 
         # WAF / IDS block: HTTP 403 with "security policy" message.
         if result["status"] == 403:
@@ -432,18 +498,13 @@ class WebUntisClient:
         return data.get("result") or {}
 
     async def _rpc(self, method: str, params: dict) -> Any:
-        return await self._rpc_via_browser(method, params)
+        return await self._rpc_call(method, params)
 
     async def _get(self, url: str, params: dict, *, bearer: bool) -> Any:
-        assert self._page is not None
         str_params = {k: str(v) for k, v in params.items()}
         for attempt in range(2):
             await self._throttle()
-            result = await self._page.evaluate(
-                _GET_JS,
-                {"url": url, "params": str_params,
-                 "token": self._token if bearer else None},
-            )
+            result = await self._send_get(url, str_params, self._token if bearer else None)
             # Bearer tokens are short-lived; refresh once on 401.
             if bearer and result["status"] == 401 and attempt == 0:
                 await self._refresh_token()
@@ -589,7 +650,18 @@ class WebUntisClient:
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
+    async def _close_http(self, save: bool) -> None:
+        if self._http is None:
+            return
+        try:
+            if save:
+                self._http.save_cookies()
+        finally:
+            await self._http.aclose()
+            self._http = None
+
     async def close(self) -> None:
+        await self._close_http(save=self._logged_in)
         if self._page:
             try:
                 await self._page.close()

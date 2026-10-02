@@ -45,7 +45,7 @@ async def test_reuses_saved_session(cfg, fake_playwright):
     session = BrowserSession(cfg)
     _patch_stealth(session)
     async with session:
-        pass
+        await session.start()
     kwargs = fake_playwright.new_context.call_args.kwargs
     assert kwargs["storage_state"] == Path(cfg.storage_state_path)
 
@@ -62,7 +62,7 @@ async def test_fresh_deletes_state_before_context(cfg, fake_playwright):
     session = BrowserSession(cfg, fresh=True)
     _patch_stealth(session)
     async with session:
-        pass
+        await session.start()
     assert fake_playwright.new_context.call_args.kwargs["storage_state"] is None
 
 
@@ -71,5 +71,18 @@ async def test_fresh_without_saved_state(cfg, fake_playwright):
     session = BrowserSession(cfg, fresh=True)
     _patch_stealth(session)
     async with session:
-        pass
+        await session.start()
     assert fake_playwright.new_context.call_args.kwargs["storage_state"] is None
+
+
+async def test_entering_does_not_launch_browser(cfg, fake_playwright):
+    session = BrowserSession(cfg)
+    _patch_stealth(session)
+    async with session:
+        assert not session.started
+    fake_playwright.new_context.assert_not_called()
+
+
+async def test_fresh_deletes_state_even_without_browser(cfg, fake_playwright):
+    async with BrowserSession(cfg, fresh=True):
+        assert not Path(cfg.storage_state_path).exists()
