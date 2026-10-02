@@ -12,6 +12,7 @@ from .dates import (
     merge_timetables,
     pick_school_day,
     school_day_span,
+    school_day_window,
     school_days,
     trim_timetable,
 )
@@ -133,18 +134,9 @@ class Scraper:
             self._timetable = None
             return (today - timedelta(days=back), today + timedelta(days=fwd), "")
 
-        days = school_days(tt)
-        after = [d for d in days if d > today]
-        before = [d for d in days if d < today]
-        notes = []
-        if fwd and len(after) < fwd:
-            notes.append(f"only {len(after)} school days in the next {(hi - today).days} days")
-        if back and len(before) < back:
-            notes.append(f"only {len(before)} school days in the last {(today - lo).days} days")
-        end = after[fwd - 1] if fwd and len(after) >= fwd else (hi if fwd else today)
-        start = before[-back] if back and len(before) >= back else (lo if back else today)
+        start, end, note = school_day_window(tt, today, back, fwd, lo, hi)
         self._timetable = trim_timetable(tt, start, end)
-        return start, end, "; ".join(notes)
+        return start, end, note
 
     async def _pick_day(self, today: date, now: datetime) -> tuple[date, str]:
         """Resolve --tomorrow / --next to a concrete school day by looking

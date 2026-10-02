@@ -202,6 +202,8 @@ untis -s --date 12.10.     # also 12.10.2026 or 2026-10-12
 untis -s --from mon --to fri     # this school week
 untis -s --from tue --to mon     # Tue this week to Mon next week
 untis -s --to fri                # from today until Friday
+untis -s --offline               # from the last fetched data, no network
+untis -s --max-age 10m           # cached data if younger than 10 min, else fetch
 
 # Also keep the raw API payloads
 untis --keep-raw -v
@@ -212,6 +214,8 @@ untis -s --days-forward 0       # today only
 ```
 
 `--from` / `--to` accept everything `--date` does, plus `today`, `tomorrow` and weekday names in English or German (`mon`, `monday`, `mo`, `montag`, …). A weekday means this week's; if `--to` would end up before `--from`, it means next week's.
+
+Every real run saves its data in `~/.local/share/untis/cache/last.json` (private, without `raw`). `--offline` answers only from there and never touches the network; if the cache doesn't cover the requested days (or is from another account), it says so and exits with code 4. `--max-age` uses the cache when it is recent enough and covers the request, and fetches otherwise. Answers from the cache show their age in the header, e.g. `(cached, 14 min old)`, and don't write new JSON files.
 
 `--short` prints one block per school day: time, subject, teacher, room,
 plus a marker for what happened to the lesson:
@@ -326,7 +330,7 @@ add `-v` for the full traceback.
 
 - **Password:** `~/.config/untis/.env`. Make it readable only by you (`chmod 600`). `untis` warns if other users can read it.
 - **Login session:** the cookies in `~/.local/share/untis/sessions/storage_state.json` let anyone with the file act as you until the session expires. The file is created with mode `600` in a `700` directory.
-- **Output and debug files:** `out/` (your name, timetable, absences) and `logs/` (screenshots of the WebUntis page) are private as well, and files from older versions are fixed on the next run. Check screenshots before sharing them.
+- **Output and debug files:** `out/` and `cache/` (your name, timetable, absences) and `logs/` (screenshots of the WebUntis page) are private as well, and files from older versions are fixed on the next run. Check screenshots before sharing them.
 - **Browser sandbox:** Chromium runs with its sandbox enabled. Only in Docker or similar setups that need it, set `"browser_no_sandbox": true` in `config.json` (it is enabled automatically when running as root).
 
 ```bash

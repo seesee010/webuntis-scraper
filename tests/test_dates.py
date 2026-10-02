@@ -189,3 +189,30 @@ def test_resolve_from_to_explicit_end_before_start():
 def test_resolve_from_to_needs_something():
     with pytest.raises(ValueError):
         resolve_from_to(None, None, WED)
+
+
+# --- school_day_window (shared by the scraper and the cache, #32) ----------
+from untis.dates import school_day_window  # noqa: E402
+
+_WEEKDAYS = _tt({(FRI + timedelta(days=i)).isoformat(): [("07:50", "08:40", {})]
+                 for i in range(-10, 14) if (FRI + timedelta(days=i)).weekday() < 5})
+
+
+def test_school_day_window_forward_and_back():
+    lo, hi = FRI - timedelta(days=10), FRI + timedelta(days=13)
+    assert school_day_window(_WEEKDAYS, FRI, 0, 4, lo, hi) == (FRI, date(2026, 10, 8), "")
+    assert school_day_window(_WEEKDAYS, FRI, 2, 0, lo, hi) == (date(2026, 9, 30), FRI, "")
+    assert school_day_window(_WEEKDAYS, FRI, 0, 0, lo, hi) == (FRI, FRI, "")
+
+
+def test_school_day_window_not_enough_days():
+    # The timetable passed in covers exactly lo..hi (as the scraper fetches it).
+    lo, hi = FRI, FRI + timedelta(days=3)                       # only Mon in range
+    tt = trim_timetable(_WEEKDAYS, lo, hi)
+    start, end, note = school_day_window(tt, FRI, 0, 3, lo, hi)
+    assert (start, end) == (FRI, hi)
+    assert note == "only 1 school days in the next 3 days"
+    lo = FRI - timedelta(days=2)
+    tt = trim_timetable(_WEEKDAYS, lo, FRI)
+    start, end, note = school_day_window(tt, FRI, 5, 0, lo, FRI)
+    assert start == lo and note == "only 2 school days in the last 2 days"   # Wed + Thu

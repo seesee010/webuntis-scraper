@@ -207,6 +207,8 @@ untis -s --date 12.10.     # aussi 12.10.2026 ou 2026-10-12
 untis -s --from mon --to fri     # cette semaine de cours
 untis -s --from tue --to mon     # du mar. de cette semaine au lun. suivant
 untis -s --to fri                # d'aujourd'hui à vendredi
+untis -s --offline               # depuis les dernières données, sans réseau
+untis -s --max-age 10m           # cache s'il a moins de 10 min, sinon charger
 
 # Conserver aussi les données brutes de l'API
 untis --keep-raw -v
@@ -217,6 +219,8 @@ untis -s --days-forward 0       # seulement aujourd'hui
 ```
 
 `--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
+
+Chaque exécution réelle enregistre ses données dans `~/.local/share/untis/cache/last.json` (privé, sans `raw`). `--offline` répond uniquement à partir de là et n'utilise jamais le réseau ; si le cache ne couvre pas les jours demandés (ou vient d'un autre compte), il le dit et se termine avec le code 4. `--max-age` utilise le cache s'il est assez récent et couvre la demande, sinon il charge les données. Les réponses depuis le cache affichent leur âge dans l'en-tête, par ex. `(cached, 14 min old)`, et n'écrivent pas de nouveaux fichiers JSON.
 
 `--short` affiche un bloc par jour de cours : heure, matière, enseignant, salle, et une
 indication de ce qui est arrivé au cours :
@@ -331,7 +335,7 @@ ajoute `-v` pour voir la trace complète.
 
 - **Mot de passe :** `~/.config/untis/.env`. Rends-le lisible uniquement par toi (`chmod 600`). `untis` avertit si d'autres utilisateurs peuvent le lire.
 - **Session de connexion :** avec les cookies de `~/.local/share/untis/sessions/storage_state.json`, toute personne qui possède le fichier peut agir en ton nom jusqu'à l'expiration de la session. Le fichier est créé avec le mode `600` dans un dossier `700`.
-- **Sorties et fichiers de débogage :** `out/` (ton nom, emploi du temps, absences) et `logs/` (captures de la page WebUntis) sont aussi privés, et les fichiers des anciennes versions sont corrigés à la prochaine exécution. Vérifie les captures avant de les partager.
+- **Sorties et fichiers de débogage :** `out/` et `cache/` (ton nom, emploi du temps, absences) et `logs/` (captures de la page WebUntis) sont aussi privés, et les fichiers des anciennes versions sont corrigés à la prochaine exécution. Vérifie les captures avant de les partager.
 - **Sandbox du navigateur :** Chromium tourne avec sa sandbox activée. Seulement dans Docker ou des environnements similaires qui en ont besoin, mets `"browser_no_sandbox": true` dans `config.json` (activé automatiquement en tant que root).
 
 ```bash

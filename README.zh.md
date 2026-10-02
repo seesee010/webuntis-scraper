@@ -198,6 +198,8 @@ untis -s --date 12.10.     # 也可以写 12.10.2026 或 2026-10-12
 untis -s --from mon --to fri     # 本周的上课日
 untis -s --from tue --to mon     # 本周二到下周一
 untis -s --to fri                # 从今天到周五
+untis -s --offline               # 使用上次获取的数据，不联网
+untis -s --max-age 10m           # 缓存不超过 10 分钟就使用，否则重新获取
 
 # 同时保留 API 的原始数据
 untis --keep-raw -v
@@ -208,6 +210,8 @@ untis -s --days-forward 0       # 只看今天
 ```
 
 `--from` / `--to` 支持 `--date` 的所有格式，另外还支持 `today`、`tomorrow` 以及英文或德文的星期名称（`mon`、`monday`、`mo`、`montag` 等）。星期名称指本周的那一天；如果这样 `--to` 会早于 `--from`，则指下周的那一天。
+
+每次真正运行都会把数据保存到 `~/.local/share/untis/cache/last.json`（私有，不含 `raw`）。`--offline` 只使用这里的数据，从不联网；如果缓存不包含所请求的日期（或来自其他账户），会给出提示并以代码 4 退出。`--max-age` 在缓存足够新且包含所请求的范围时使用缓存，否则重新获取。来自缓存的结果会在标题中显示数据的年龄，例如 `(cached, 14 min old)`，并且不会写入新的 JSON 文件。
 
 `--short` 为每个上课日显示一块内容：时间、科目、老师、教室，以及这节课发生了什么：
 
@@ -313,7 +317,7 @@ untis -s --days-forward 0       # 只看今天
 
 - **密码：** `~/.config/untis/.env`。请设置为只有你能读取（`chmod 600`）。如果其他用户可以读取，`untis` 会发出警告。
 - **登录会话：** 任何拿到 `~/.local/share/untis/sessions/storage_state.json` 的人，都可以在会话过期前冒充你。该文件以 `600` 权限创建，所在目录为 `700`。
-- **输出和调试文件：** `out/`（你的姓名、课表、缺勤记录）和 `logs/`（WebUntis 页面截图）同样是私有的，旧版本留下的文件会在下次运行时自动修正。分享截图前请先检查。
+- **输出和调试文件：** `out/`、`cache/`（你的姓名、课表、缺勤记录）和 `logs/`（WebUntis 页面截图）同样是私有的，旧版本留下的文件会在下次运行时自动修正。分享截图前请先检查。
 - **浏览器沙箱：** Chromium 默认启用沙箱。只有在 Docker 等需要的环境中，才在 `config.json` 中设置 `"browser_no_sandbox": true`（以 root 运行时会自动启用）。
 
 ```bash
