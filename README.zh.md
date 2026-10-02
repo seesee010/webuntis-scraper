@@ -7,26 +7,37 @@
 >
 > *This translation was made with AI and may be inaccurate. The English version is authoritative.*
 
-基于 Playwright 的 WebUntis 抓取工具。它可以获取你的课表、考试、作业、缺勤记录和消息，并保存为
+WebUntis 抓取工具（使用普通 HTTP，必要时用 Playwright 作为备用方案）。它可以获取你的课表、考试、作业、缺勤记录和消息，并保存为
 结构化的 JSON。
 
 ## 工作原理
 
-JSON-RPC 接口前面有一个 WAF（网站防火墙），会拦截没有真实浏览器环境的请求。所以**所有操作**都通过
-Playwright 完成：
+默认情况下（`--transport auto`）不需要浏览器：
 
-1. **登录**：使用真实的登录表单（只有当 `sessions/storage_state.json` 中没有有效会话时才需要）。
+1. **登录**：通过普通 HTTP 提交 WebUntis 的登录表单（`/WebUntis/j_spring_security_check`），
+   只有当 `sessions/storage_state.json` 中保存的会话过期时才需要。WebUntis 会在一段时间不活动后
+   结束会话（观察到大约 40 分钟），所以经常需要重新登录。
 2. **检查会话**：只有已登录的会话，`GET /WebUntis/api/token/new` 才会返回 JWT。它包含
    `person_id` 和角色。
-3. **所有 API 请求**都通过 `page.evaluate(fetch(...))` 在浏览器中执行：
-   - 课表：REST v1 `/api/rest/view/v1/timetable/entries`
-     （需要把 JWT 作为 Bearer 令牌），备用方案是 JSON-RPC `getTimetable`
+3. **API 请求**使用会话 Cookie（REST v1 还需要把 JWT 作为 Bearer 令牌）：
+   - 课表：REST v1 `/api/rest/view/v1/timetable/entries`，
+     备用方案是 JSON-RPC `getTimetable`
    - 考试：`/api/exams`
    - 作业：`/api/homeworks/lessons`
    - 缺勤：`/api/classreg/absences/students`
    - 消息：REST v1 `/api/rest/view/v1/messages`
 
-`playwright-stealth` 会隐藏常见的机器人检测特征
+如果 HTTP 登录收到意外的回应（例如被 WAF 拦截、需要双重验证或 SSO），`untis` 会改用真正的
+**Chromium（通过 Playwright）**：它会填写登录表单，并在页面中执行 API 请求。用户名或密码错误时
+*不会*再用浏览器重试（那只会多一次失败的登录）。两种方式使用同一个会话文件。
+
+| `--transport` | 行为 |
+|---|---|
+| `auto`（默认） | 使用 HTTP，只有失败时才用浏览器 |
+| `http` | 只用 HTTP，从不启动浏览器 |
+| `browser` | 总是使用 Playwright（使用 `--no-headless` 时也是） |
+
+在浏览器模式下，`playwright-stealth` 会隐藏常见的机器人检测特征
 （`navigator.webdriver`、`navigator.plugins`、`navigator.languages` 等）。
 
 ## 安装
@@ -157,7 +168,7 @@ python -m src -s --days-forward 0       # 只看今天
 1. **服务器和学校标识正确吗？** 在 `webuntis.com` 上搜索你的学校；跳转后的网址是
    `https://<server>.webuntis.com/WebUntis/?school=<slug>`。
 2. **密码里有特殊字符吗？** `.env` 支持 `=` 和引号，但开头的空格会被删除。
-3. **有验证码 / SSO / 双重验证（2FA）吗？** → `python -m src --form-login --no-headless`
+3. **有验证码 / SSO / 双重验证（2FA）吗？** → `untis --transport browser --no-headless --form-login`
 4. **截图：** 数据目录中的 `logs/login_failed.png` 显示了浏览器看到的页面。
 5. **详细输出：** `python -m src -v`。
 
@@ -232,7 +243,8 @@ src/
   main.py           # 命令行入口
   config.py         # 读取 config.json 和 .env
   browser.py        # Playwright + stealth
-  untis_client.py   # 登录、检查会话、在浏览器中调用 API
+  http_transport.py # 通过普通 HTTP 登录和发送请求（默认）
+  untis_client.py   # 登录（HTTP 或浏览器）、检查会话、调用 API
   normalize.py      # 原始数据 -> 整理后的字典
   scraper.py        # 流程控制
   exporter.py       # JSON 输出
