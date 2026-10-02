@@ -78,3 +78,34 @@ def test_derived_urls():
     cfg = load_config(js, env)
     assert cfg.base_url == "https://mese.webuntis.com"
     assert "school=htl" in cfg.login_url
+
+
+def _cfg_files(data: dict) -> tuple[Path, Path]:
+    js = _write(Path(tempfile.mktemp(suffix=".json")),
+                json.dumps({"server": "s", "school": "sc", **data}))
+    env = _write(Path(tempfile.mktemp(suffix=".env")), "")
+    return js, env
+
+
+import pytest  # noqa: E402
+from src.config import ConfigError  # noqa: E402
+
+
+@pytest.mark.parametrize("key", ["days_back", "days_forward"])
+def test_negative_day_counts_are_rejected(key):
+    with pytest.raises(ConfigError, match=f"{key} must be 0 or more"):
+        load_config(*_cfg_files({key: -2}))
+
+
+def test_zero_day_counts_are_fine():
+    cfg = load_config(*_cfg_files({"days_back": 0, "days_forward": 0}))
+    assert (cfg.days_back, cfg.days_forward) == (0, 0)
+
+
+@pytest.mark.parametrize("raw, expected", [(True, True), ("true", True), ("no", False), (False, False)])
+def test_calendar_days_from_config(raw, expected):
+    assert load_config(*_cfg_files({"calendar_days": raw})).calendar_days is expected
+
+
+def test_calendar_days_default_false():
+    assert load_config(*_cfg_files({})).calendar_days is False

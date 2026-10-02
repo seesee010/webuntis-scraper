@@ -8,7 +8,13 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from .config import ScraperConfig
-from .dates import pick_school_day, trim_timetable
+from .dates import (
+    merge_timetables,
+    pick_school_day,
+    school_day_span,
+    school_days,
+    trim_timetable,
+)
 from .normalize import (
     normalize_absence,
     normalize_exam,
@@ -23,6 +29,10 @@ log = logging.getLogger(__name__)
 
 # How far --tomorrow / --next look ahead for a school day (holidays!).
 PICK_SEARCH_DAYS = 21
+# --days-forward/--days-back: if holidays leave too few school days in the
+# first guess, fetch this many more calendar days, up to MAX_EXTENSIONS times.
+EXTEND_DAYS = 14
+MAX_EXTENSIONS = 4
 
 
 class Scraper:
@@ -30,6 +40,7 @@ class Scraper:
         self.cfg = cfg
         self.client = client
         self._timetable: dict[str, Any] | None = None
+        self._own_classes: set[str] | None = None
 
     async def run(
         self, today: date | None = None, now: datetime | None = None,
@@ -41,6 +52,8 @@ class Scraper:
         if self.cfg.pick_day:
             start, note = await self._pick_day(today, now)
             end = start
+        elif self._counts_school_days():
+            start, end, note = await self._school_day_window(today)
         log.info("Scraping window: %s .. %s %s", start, end, note)
 
         result: dict[str, Any] = {
@@ -86,6 +99,53 @@ class Scraper:
         return (today - timedelta(days=self.cfg.days_back),
                 today + timedelta(days=self.cfg.days_forward))
 
+    def _counts_school_days(self) -> bool:
+        return (not self.cfg.start_date and not self.cfg.calendar_days
+                and (self.cfg.days_back > 0 or self.cfg.days_forward > 0))
+
+    async def _school_day_window(self, today: date) -> tuple[date, date, str]:
+        """Today plus the next --days-forward / previous --days-back school
+        days (days with at least one entry that takes place), so weekends
+        and holidays don't eat into the count."""
+        back, fwd = self.cfg.days_back, self.cfg.days_forward
+        lo = today - timedelta(days=school_day_span(back))
+        hi = today + timedelta(days=school_day_span(fwd))
+        try:
+            tt = await self._fetch_timetable(lo, hi)
+            for _ in range(MAX_EXTENSIONS):
+                days = school_days(tt)
+                more_fwd = len([d for d in days if d > today]) < fwd
+                more_back = len([d for d in days if d < today]) < back
+                if not (more_fwd or more_back):
+                    break
+                if more_fwd:
+                    new_hi = hi + timedelta(days=EXTEND_DAYS)
+                    tt = merge_timetables(
+                        tt, await self._fetch_timetable(hi + timedelta(days=1), new_hi))
+                    hi = new_hi
+                if more_back:
+                    new_lo = lo - timedelta(days=EXTEND_DAYS)
+                    tt = merge_timetables(
+                        await self._fetch_timetable(new_lo, lo - timedelta(days=1)), tt)
+                    lo = new_lo
+        except Exception as exc:
+            log.warning("Could not count school days, using calendar days: %s", exc)
+            self._timetable = None
+            return (today - timedelta(days=back), today + timedelta(days=fwd), "")
+
+        days = school_days(tt)
+        after = [d for d in days if d > today]
+        before = [d for d in days if d < today]
+        notes = []
+        if fwd and len(after) < fwd:
+            notes.append(f"only {len(after)} school days in the next {(hi - today).days} days")
+        if back and len(before) < back:
+            notes.append(f"only {len(before)} school days in the last {(today - lo).days} days")
+        end = after[fwd - 1] if fwd and len(after) >= fwd else (hi if fwd else today)
+        start = before[-back] if back and len(before) >= back else (lo if back else today)
+        self._timetable = trim_timetable(tt, start, end)
+        return start, end, "; ".join(notes)
+
     async def _pick_day(self, today: date, now: datetime) -> tuple[date, str]:
         """Resolve --tomorrow / --next to a concrete school day by looking
         at the real timetable, so weekends, holidays and fully cancelled
@@ -110,36 +170,44 @@ class Scraper:
     # --- module scrapers ------------------------------------------------
 
     async def _scrape_timetable(self, start: date, end: date) -> dict[str, Any]:
+        """Timetable for the window (cached: the window logic may already
+        have fetched and trimmed it)."""
+        if self._timetable is None:
+            self._timetable = await self._fetch_timetable(start, end)
+        return self._timetable
+
+    async def _fetch_timetable(self, start: date, end: date) -> dict[str, Any]:
         """Try the REST v1 grid first, fall back to JSON-RPC."""
-        if self._timetable is not None:
-            return self._timetable
         try:
             grid = await self.client.get_timetable_grid(start, end)
             if grid.get("days"):
-                try:
-                    own_classes = await self.client.get_own_classes()
-                except Exception as exc:
-                    log.warning("Could not determine own class: %s", exc)
-                    own_classes = set()
-                self._timetable = {
+                own_classes = await self._get_own_classes()
+                return {
                     "source": "rest_v1",
                     "start": start.isoformat(),
                     "end": end.isoformat(),
                     "own_classes": sorted(own_classes),
                     **normalize_timetable_grid(grid, own_classes),
                 }
-                return self._timetable
         except Exception as exc:
             log.warning("REST v1 timetable failed, falling back to JSON-RPC: %s", exc)
 
         raw = await self.client.get_timetable(start, end)
-        self._timetable = {
+        return {
             "source": "jsonrpc",
             "start": start.isoformat(),
             "end": end.isoformat(),
             "lessons": [normalize_timetable_lesson(x) for x in raw],
         }
-        return self._timetable
+
+    async def _get_own_classes(self) -> set[str]:
+        if self._own_classes is None:
+            try:
+                self._own_classes = await self.client.get_own_classes()
+            except Exception as exc:
+                log.warning("Could not determine own class: %s", exc)
+                self._own_classes = set()
+        return self._own_classes
 
     async def _scrape_exams(self, start: date, end: date) -> dict[str, Any]:
         try:

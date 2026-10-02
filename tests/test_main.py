@@ -105,3 +105,31 @@ class TestDateShortcuts:
         with pytest.raises(SystemExit) as exc:
             self._parse(monkeypatch, *argv)
         assert exc.value.code == 2
+
+
+class TestDayCountArgs:
+    @pytest.mark.parametrize("text, value", [("0", 0), ("4", 4), ("14", 14)])
+    def test_non_negative_int_accepts(self, text, value):
+        assert main_mod._non_negative_int(text) == value
+
+    @pytest.mark.parametrize("text, msg", [("-1", "0 or more"), ("abc", "not a number"),
+                                           ("1.5", "not a number"), ("", "not a number")])
+    def test_non_negative_int_rejects(self, text, msg):
+        import argparse
+        with pytest.raises(argparse.ArgumentTypeError, match=msg):
+            main_mod._non_negative_int(text)
+
+    @pytest.mark.parametrize("argv", [("--days-forward", "-3"), ("--days-back", "-1"),
+                                      ("--days-forward", "x")])
+    def test_cli_rejects_invalid_counts_with_exit_2(self, monkeypatch, capsys, argv):
+        monkeypatch.setattr(sys, "argv", ["untis", *argv])
+        with pytest.raises(SystemExit) as exc:
+            main_mod._parse_args()
+        assert exc.value.code == 2
+
+    def test_calendar_days_flag(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["untis", "--calendar-days", "--days-forward", "4"])
+        args = main_mod._parse_args()
+        assert args.calendar_days is True and args.days_forward == 4
+        monkeypatch.setattr(sys, "argv", ["untis"])
+        assert main_mod._parse_args().calendar_days is False
