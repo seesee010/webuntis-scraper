@@ -162,6 +162,20 @@ Entfernte Lehrer werden durchgestrichen (`~ALT~` ohne Farben). Der
 Tageskopf zeigt, wann die Schule an dem Tag wirklich beginnt und endet,
 z.B. `Mon 05.10.  07:50–13:25`.
 
+Für heute zeigt die Tagesansicht außerdem, wo du gerade bist: Die laufende
+Stunde bekommt ein `▶` und die Restzeit, vergangene Stunden werden
+abgedunkelt, und in der Pause oder vor Schulbeginn zeigt eine „now“-Linie,
+wann die nächste Stunde beginnt. Entfallene Stunden werden nie als aktuell
+markiert, nach Schulschluss wird nichts markiert.
+
+```
+  07:50–09:35  MATH  TCH1  R101                       (dimmed: already over)
+▶ 09:40–10:30  GER   TCH2  R101   now · 18 min left
+  10:45–11:35  PROG  TCH3  R101
+
+  ──── now 10:37 · next in 8 min ────                 (in a break)
+```
+
 `--tomorrow` und `--next` schauen in den echten Stundenplan: Wochenenden,
 Ferien und Tage, an denen alles entfällt, werden übersprungen; im
 Tageskopf steht dann `(next school day)`.

@@ -1,7 +1,12 @@
 """Tests for the --short terminal summary."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from src.summary import render_summary
+
+# Fixed "now" far away from the fixtures, so the live marker never kicks in.
+NOT_LIVE = datetime(2000, 1, 1, 12, 0)
 
 
 def _payload(**sections):
@@ -40,7 +45,7 @@ def test_day_view_marks_changes_and_cancellations():
         ]},
         {"date": "2026-10-06", "entries": []},
     ]}
-    out = render_summary(_payload(timetable=tt), color=False)
+    out = render_summary(_payload(timetable=tt), color=False, now=NOT_LIVE)
     lines = out.splitlines()
 
     assert "Mon 05.10." in out
@@ -66,7 +71,7 @@ def test_exams_homework_and_counts():
         ]},
         absences={"items": [{"is_excused": False}, {"is_excused": True}]},
         messages={"items": [{"read": False}]},
-    ), color=False)
+    ), color=False, now=NOT_LIVE)
     assert "Mon 19.10. 10:45" in out and "SYT" in out
     assert "due Wed 07.10." in out and "p. 42" in out
     assert "done already" not in out
@@ -75,7 +80,7 @@ def test_exams_homework_and_counts():
 
 
 def test_module_error_is_shown():
-    out = render_summary(_payload(timetable={"error": "HTTP 500"}), color=False)
+    out = render_summary(_payload(timetable={"error": "HTTP 500"}), color=False, now=NOT_LIVE)
     assert "timetable: HTTP 500" in out
 
 
@@ -93,7 +98,7 @@ def test_event_removed_and_no_teacher_labels():
                [{"short": "TCH10", "status": "ADDED", "replaces": "TCH2"}],
                ["R101"], status="CHANGED"),
     ]}]}
-    lines = render_summary(_payload(timetable=tt), color=False).splitlines()
+    lines = render_summary(_payload(timetable=tt), color=False, now=NOT_LIVE).splitlines()
     line = lambda needle: next(l for l in lines if needle in l)
 
     assert "★ EVENT-NAME" in line("EVENT-NAME")
@@ -110,6 +115,6 @@ def test_cancelled_wins_over_removed():
         _entry("07:50", "08:40", "GEO", [{"short": "TCH1"}], status="CANCELLED",
                cancelled=True, removed=True),
     ]}]}
-    out = render_summary(_payload(timetable=tt), color=False)
+    out = render_summary(_payload(timetable=tt), color=False, now=NOT_LIVE)
     assert next(l for l in out.splitlines() if "GEO" in l).endswith("cancelled")
     assert "removed" not in out

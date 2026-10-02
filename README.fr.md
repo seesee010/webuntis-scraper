@@ -163,6 +163,20 @@ Les enseignants retirés sont barrés (`~ANCIEN~` sans couleurs). L'en-tête de 
 indique quand les cours commencent et finissent réellement ce jour-là, par exemple
 `Mon 05.10.  07:50–13:25`.
 
+Pour aujourd'hui, la vue par jour montre aussi où tu en es : le cours en
+cours reçoit un `▶` et le temps restant, les cours terminés sont grisés, et
+pendant une pause ou avant les cours, une ligne « now » indique quand le
+prochain cours commence. Les cours annulés ne sont jamais marqués comme en
+cours, et après les cours rien n'est marqué.
+
+```
+  07:50–09:35  MATH  TCH1  R101                       (dimmed: already over)
+▶ 09:40–10:30  GER   TCH2  R101   now · 18 min left
+  10:45–11:35  PROG  TCH3  R101
+
+  ──── now 10:37 · next in 8 min ────                 (in a break)
+```
+
 `--tomorrow` et `--next` regardent le vrai emploi du temps : les week-ends, les vacances
 et les jours où tous les cours sont annulés sont sautés ; l'en-tête du jour affiche alors
 `(next school day)`.
