@@ -22,6 +22,22 @@ _STATUS_LABELS = {
 }
 
 
+# Status -> ANSI SGR codes. One table, so all colors live in one place
+# (and can become themes later, #45).
+ROLE_STYLES: dict[str, str] = {
+    "cancelled": "31;9",       # red, struck through
+    "removed": "2;9",          # gray (dim), struck through: your class was taken out
+    "changed": "32",           # green: substitute, moved, other change
+    "substitution": "32",
+    "extra": "32",             # additional lesson
+    "no teacher": "33",        # yellow: teacher gone, nobody replaces them yet
+    "exam": "1;35",            # bold magenta
+    "event": "1;34",           # bold blue
+    "added": "1;32",           # the substitute teacher / new room itself
+    "gone": "31;9",            # a removed teacher / room
+}
+
+
 class _Style:
     def __init__(self, enabled: bool):
         self.enabled = enabled
@@ -37,6 +53,18 @@ class _Style:
     def blue(self, t: str) -> str: return self._wrap("34", t)
     def cyan(self, t: str) -> str: return self._wrap("36", t)
     def strike(self, t: str) -> str: return self._wrap("9", t)
+    def green(self, t: str) -> str: return self._wrap("32", t)
+
+    def role(self, name: str, t: str) -> str:
+        """Style `t` for a status from ROLE_STYLES (unknown -> unchanged)."""
+        code = ROLE_STYLES.get(name)
+        return self._wrap(code, t) if code else t
+
+
+def resolve_color(mode: str = "auto") -> Optional[bool]:
+    """--color auto|always|never -> the `color` argument of render_summary.
+    "always" wins over NO_COLOR (explicit flags beat the env var)."""
+    return {"always": True, "never": False}.get(mode)
 
 
 def use_color() -> bool:
@@ -52,22 +80,47 @@ def _shorts(items: list[dict]) -> str:
     return ", ".join(x.get("short") or "?" for x in items)
 
 
-def _teachers(items: list[dict], st: _Style) -> tuple[str, str]:
-    """Return (plain, styled) so columns can be padded on visible width."""
+def _elements(items: list[dict], st: _Style, base=None) -> tuple[str, str]:
+    """Teachers or rooms as (plain, styled), so columns can be padded on
+    the visible width. Substitutes / new rooms are highlighted, removed
+    ones struck through (`~X~` without colors); `base` styles the rest."""
     plain, styled = [], []
     for t in items:
         name = t.get("short") or "?"
         if t.get("status") == "REMOVED":
             # Strikethrough needs ANSI; mark it textually without colors.
             plain.append(name if st.enabled else f"~{name}~")
-            styled.append(st.red(st.strike(name)) if st.enabled else f"~{name}~")
-        elif t.get("replaces"):
-            plain.append(f"{name} (for {t['replaces']})")
-            styled.append(st.yellow(name) + st.dim(f" (for {t['replaces']})"))
+            styled.append(st.role("gone", name) if st.enabled else f"~{name}~")
+        elif t.get("replaces") or t.get("status") == "ADDED":
+            note = f" (for {t['replaces']})" if t.get("replaces") else ""
+            plain.append(name + note)
+            styled.append(st.role("added", name) + st.dim(note))
         else:
             plain.append(name)
-            styled.append(name)
+            styled.append(base(name) if base else name)
     return ", ".join(plain), ", ".join(styled)
+
+
+def _teachers(items: list[dict], st: _Style) -> tuple[str, str]:
+    return _elements(items, st)
+
+
+def _rooms(items: list[dict], st: _Style) -> tuple[str, str]:
+    return _elements(items, st, base=st.cyan)
+
+
+def _label_tag(label: str, st: _Style) -> str:
+    """The status word at the end of a row (not struck through itself)."""
+    if label == "cancelled":
+        return st.red(label)
+    if label == "removed":
+        return st.dim(label)
+    return st.role(label, label) if label else ""
+
+
+# Labels whose color also tints the subject (cancelled/removed restyle
+# the whole line instead).
+_TINTED_SUBJECT = ("changed", "substitution", "extra", "no teacher", "exam")
 
 
 def _pad(styled: str, plain: str, width: int) -> str:
@@ -89,7 +142,7 @@ def _rows_from_grid(timetable: dict) -> dict[str, list[dict]]:
                 "title": e.get("info") or e.get("lesson_text")
                          or (e.get("type") or "").replace("_", " ").title(),
                 "teachers": e.get("teachers") or [],
-                "rooms": _shorts(e.get("rooms") or []),
+                "rooms": e.get("rooms") or [],
                 "note": e.get("substitution_text") or e.get("lesson_text") or "",
                 "is_event": e.get("is_event"),
                 "is_removed": e.get("is_removed"),
@@ -113,7 +166,7 @@ def _rows_from_lessons(timetable: dict) -> dict[str, list[dict]]:
             "subject": _shorts(l.get("subjects") or []),
             "title": l.get("type") or "",
             "teachers": l.get("teachers") or [],
-            "rooms": _shorts(l.get("rooms") or []),
+            "rooms": l.get("rooms") or [],
             "note": l.get("substitution_text") or l.get("text") or "",
         })
     return days
@@ -225,7 +278,7 @@ def _render_timetable(
     all_rows = [r for rows in days.values() for r in rows if r["subject"]]
     subj_w = max((len(r["subject"]) for r in all_rows), default=0)
     teach_w = max((len(_teachers(r["teachers"], st)[0]) for r in all_rows), default=0)
-    room_w = max((len(r["rooms"]) for r in all_rows), default=0)
+    room_w = max((len(_rooms(r["rooms"], st)[0]) for r in all_rows), default=0)
     out: list[str] = []
     for day_iso in sorted(days):
         note = window.get("note", "") if day_iso == window.get("start") else ""
@@ -246,38 +299,35 @@ def _render_timetable(
 
             label = _label(r)
             t_plain, t_styled = _teachers(r["teachers"], st)
+            r_plain, r_styled = _rooms(r["rooms"], st)
 
             gutter = st.bold(st.yellow("▶")) + " " if is_current else "  "
             # Pad on the visible width; ANSI codes would break f"{x:<11}".
             time_cell = (st.bold(time) if is_current else time) + " " * (11 - len(time))
             line = gutter + time_cell + "  "
             if r["subject"] and not r.get("is_event"):
-                line += _pad(st.bold(r["subject"]), r["subject"], subj_w) + "  "
+                subject = (st.role(label, r["subject"]) if label in _TINTED_SUBJECT
+                           else st.bold(r["subject"]))
+                line += _pad(subject, r["subject"], subj_w) + "  "
                 line += _pad(t_styled, t_plain, teach_w) + "  "
-                line += _pad(st.cyan(r["rooms"]), r["rooms"], room_w)
+                line += _pad(r_styled, r_plain, room_w)
             else:
                 # Events have no subject: title across the columns, then
                 # whoever runs them.
                 title = r["title"] or r["subject"]
-                line += st.bold(st.blue(f"★ {title}"))
+                line += st.role("event", f"★ {title}")
                 if t_plain:
                     line += f"  {t_styled}"
-                if r["rooms"]:
-                    line += f"  {st.cyan(r['rooms'])}"
+                if r_plain:
+                    line += f"  {r_styled}"
             if r["note"]:
                 line += f"  {st.dim(r['note'])}"
             if not label:
                 line = line.rstrip()
-            if label == "cancelled":
-                line = st.dim(st.strike(_plain(line))) + "  " + st.red(label)
-            elif label == "removed":
-                line = st.dim(st.strike(_plain(line))) + "  " + st.dim(label)
-            elif label == "exam":
-                line += "  " + st.magenta(label)
-            elif label == "event":
-                line += "  " + st.blue(label)
+            if label in ("cancelled", "removed"):
+                line = st.role(label, _plain(line)) + "  " + _label_tag(label, st)
             elif label:
-                line += "  " + st.yellow(label)
+                line += "  " + _label_tag(label, st)
             if is_current:
                 left = _minutes_between(live["now"], r["end"])
                 line += "  " + st.bold(st.yellow(f"now · {_fmt_minutes(left)} left"))
@@ -374,4 +424,39 @@ def render_summary(
     errors = [n for n in ("absences", "messages") if "error" in (payload.get(n) or {})]
     for n in errors:
         lines.append(st.red(f"{n}: {payload[n]['error']}"))
+    return "\n".join(lines)
+
+
+# One example row per status for --legend (anonymized, like the README).
+_LEGEND = [
+    ("regular", "MATH", [{"short": "TCH1"}], [{"short": "R101"}], ""),
+    ("cancelled", "GEO", [{"short": "TCH2"}], [{"short": "R101"}], "cancelled"),
+    ("removed", "ETH", [{"short": "TCH5"}], [{"short": "R102"}], "removed"),
+    ("substitute", "ENG", [{"short": "TCH4", "status": "ADDED", "replaces": "TCH3"}],
+     [{"short": "R101"}], "changed"),
+    ("new room", "PROG", [{"short": "TCH6"}],
+     [{"short": "R205", "status": "ADDED", "replaces": "R101"}], "changed"),
+    ("no teacher", "NET", [{"short": "TCH7", "status": "REMOVED"}], [{"short": "R103"}],
+     "no teacher"),
+    ("exam", "MATH", [{"short": "TCH1"}], [{"short": "R101"}], "exam"),
+]
+
+
+def render_legend(color: Optional[bool] = None) -> str:
+    """What each color / marker in the day view means (--legend)."""
+    st = _Style(use_color() if color is None else color)
+    lines = [st.bold("Legend")]
+    for name, subject, teachers, rooms, label in _LEGEND:
+        t_plain, t_styled = _teachers(teachers, st)
+        r_plain, r_styled = _rooms(rooms, st)
+        subj = st.role(label, subject) if label in _TINTED_SUBJECT else st.bold(subject)
+        row = f"{_pad(subj, subject, 5)}  {_pad(t_styled, t_plain, 15)}  {_pad(r_styled, r_plain, 15)}"
+        if label in ("cancelled", "removed"):
+            row = st.role(label, _plain(row))
+        tag = _label_tag(label, st)
+        lines.append(f"  {name:<11} {row}  {tag}".rstrip())
+    lines.append(f"  {'event':<11} " + st.role("event", "★ EVENT") + "  TCH8, TCH9  "
+                 + st.role("event", "event"))
+    lines.append(f"  {'now':<11} " + st.bold(st.yellow("▶")) + " the running lesson, "
+                 + st.dim("dimmed") + " = already over")
     return "\n".join(lines)

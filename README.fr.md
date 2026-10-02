@@ -225,14 +225,14 @@ Chaque exécution réelle enregistre ses données dans `~/.local/share/untis/cac
 `--short` affiche un bloc par jour de cours : heure, matière, enseignant, salle, et une
 indication de ce qui est arrivé au cours :
 
-| Indication | Signification |
-|---|---|
-| `cancelled` | le cours n'a pas lieu |
-| `removed` | le cours a lieu, mais ta classe en a été retirée |
-| `no teacher` | l'enseignant a été retiré et personne ne le remplace encore |
-| `changed` | autre changement, par exemple un remplaçant : `NOUVEAU (for ANCIEN)` |
-| `exam` | examen |
-| `event` | un événement, par exemple une sortie (`★ titre`, avec ses enseignants) |
+| Indication | Couleur | Signification |
+|---|---|---|
+| `cancelled` | rouge, barré | le cours n'a pas lieu |
+| `removed` | gris, barré | le cours a lieu, mais ta classe en a été retirée |
+| `no teacher` | jaune | l'enseignant a été retiré et personne ne le remplace encore |
+| `changed` | vert ; le remplaçant / la nouvelle salle en vert gras | autre changement, par exemple un remplaçant : `NOUVEAU (for ANCIEN)` |
+| `exam` | magenta gras | examen |
+| `event` | bleu gras | un événement, par exemple une sortie (`★ titre`, avec ses enseignants) |
 
 Les enseignants retirés sont barrés (`~ANCIEN~` sans couleurs). L'en-tête de chaque jour
 indique quand les cours commencent et finissent réellement ce jour-là, par exemple
@@ -257,7 +257,7 @@ et les jours où tous les cours sont annulés sont sautés ; l'en-tête du jour 
 `(next school day)`.
 
 Sous les jours apparaissent les examens à venir, les devoirs non faits et une ligne avec
-les absences et les messages non lus. `NO_COLOR=1` désactive les couleurs.
+les absences et les messages non lus. Les couleurs ne sont utilisées que dans un terminal ; `--color always` les force (par ex. pour `less -R`), `--color never` ou `NO_COLOR=1` les désactive. `untis --legend` affiche la signification de chaque couleur et indication.
 
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y

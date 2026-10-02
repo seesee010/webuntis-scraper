@@ -22,7 +22,7 @@ from .config import (
 from .dates import parse_date, parse_day_spec, resolve_from_to, week_range
 from .exporter import write_json, write_latest
 from .scraper import Scraper
-from .summary import render_summary
+from .summary import render_legend, render_summary, resolve_color
 from .untis_client import LoginError, WebUntisClient, WebUntisError
 
 # Exit codes, so scripts and status bars can tell failures apart.
@@ -162,6 +162,15 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
     ap.add_argument(
         "-s", "--short", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print a compact per-day overview (JSON is still written).",
+    )
+    ap.add_argument(
+        "--color", choices=("auto", "always", "never"), **dflt("auto"),
+        help="Colors in the day view: 'auto' (default: only on a terminal, "
+             "respects NO_COLOR), 'always' (e.g. for less -R) or 'never'.",
+    )
+    ap.add_argument(
+        "--legend", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Print what the colors and markers in the day view mean.",
     )
     ap.add_argument(
         "--offline", action=argparse.BooleanOptionalAction, **dflt(False),
@@ -324,8 +333,11 @@ async def _async_main(args: argparse.Namespace) -> int:
         write_json(payload, cfg.output_dir, pretty=cfg.pretty_json, keep_raw=cfg.include_raw)
         write_latest(payload, cfg.output_dir, keep_raw=cfg.include_raw)
         cache.save(CACHE_PATH, payload, cfg, datetime.now())
+    color = resolve_color(args.color)
     if args.short:
-        print(render_summary(payload))
+        print(render_summary(payload, color=color))
+    if args.legend:
+        print(("\n" if args.short else "") + render_legend(color))
     return 0
 
 
@@ -381,6 +393,10 @@ def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, 
 
 def main() -> int:
     args = _parse_args()
+    if args.legend and not args.short:
+        # Only the legend: no login, no network.
+        print(render_legend(resolve_color(args.color)))
+        return 0
     _setup_logging(args.verbose, quiet=args.short)
     if args.default_args:
         logging.getLogger(__name__).debug(

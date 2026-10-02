@@ -223,14 +223,14 @@ Jeder echte Lauf speichert seine Daten in `~/.local/share/untis/cache/last.json`
 `--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum und markiert,
 was mit der Stunde passiert ist:
 
-| Markierung | Bedeutung |
-|---|---|
-| `cancelled` | Entfall, die Stunde findet nicht statt |
-| `removed` | die Stunde findet statt, aber deine Klasse ist ausgetragen |
-| `no teacher` | Lehrer ausgetragen, (noch) keine Supplierung |
-| `changed` | sonstige Änderung, z.B. Supplierung: `NEU (for ALT)` |
-| `exam` | Prüfung |
-| `event` | Veranstaltung, z.B. Exkursion (`★ Titel`, mit Lehrern) |
+| Markierung | Farbe | Bedeutung |
+|---|---|---|
+| `cancelled` | rot, durchgestrichen | Entfall, die Stunde findet nicht statt |
+| `removed` | grau, durchgestrichen | die Stunde findet statt, aber deine Klasse ist ausgetragen |
+| `no teacher` | gelb | Lehrer ausgetragen, (noch) keine Supplierung |
+| `changed` | grün; Ersatzlehrer / neuer Raum fett grün | sonstige Änderung, z.B. Supplierung: `NEU (for ALT)` |
+| `exam` | fett magenta | Prüfung |
+| `event` | fett blau | Veranstaltung, z.B. Exkursion (`★ Titel`, mit Lehrern) |
 
 Entfernte Lehrer werden durchgestrichen (`~ALT~` ohne Farben). Der
 Tageskopf zeigt, wann die Schule an dem Tag wirklich beginnt und endet,
@@ -255,7 +255,7 @@ Ferien und Tage, an denen alles entfällt, werden übersprungen; im
 Tageskopf steht dann `(next school day)`.
 
 Unter den Tagen folgen Prüfungen, offene Hausaufgaben, Abwesenheiten und
-ungelesene Nachrichten. `NO_COLOR=1` schaltet Farben ab.
+ungelesene Nachrichten. Farben gibt es nur im Terminal; `--color always` erzwingt sie (z.B. für `less -R`), `--color never` oder `NO_COLOR=1` schaltet sie ab. `untis --legend` zeigt, was jede Farbe und Markierung bedeutet.
 
 Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
 im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In
