@@ -13,7 +13,7 @@ from pathlib import Path
 
 import httpx
 
-from . import __version__, cache, changes, dayinfo
+from . import __version__, cache, changes, dayinfo, setup_wizard
 from . import now as now_mod
 from .browser import BrowserSession
 from .config import (
@@ -608,6 +608,8 @@ def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, 
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["init"]:
+        return setup_wizard.run(sys.argv[2:])
     args = _parse_args()
     if args.legend and not _layout(args):
         # Only the legend: no login, no network.

@@ -67,7 +67,7 @@ pipx install git+https://github.com/seesee010/webuntis-scraper
 untis --version
 ```
 
-**3. 配置**学校和登录信息，参见[配置](#配置)。然后：
+**3. 配置**学校和登录信息：运行 `untis init`（或手动设置，参见[配置](#配置)）。然后：
 
 ```bash
 untis -s --today
@@ -124,6 +124,16 @@ untis -s --today
 程序会在 `~/.config/untis/`（或 `$XDG_CONFIG_HOME/untis/`）中查找配置文件。会话、输出文件和调试截图
 会保存到 `~/.local/share/untis/`，所以可以在任何目录下运行 `untis`。如果没有
 `~/.config/untis/config.json`，所有文件都会使用项目文件夹（适合 Windows 或开发时使用）。
+
+**快速设置：** `untis init` 会询问你学校的任意一个 WebUntis 网址（登录页面，或新界面的任意页面，例如 `…/today`；这时会通过 WebUntis 公开的学校搜索找到学校）、用户名和密码，测试登录，然后写入 `config.json` 和 `.env`（权限 `600`）。已有的文件会被更新而不是替换，密码永远不会显示。如果账户使用双重验证或 SSO，请加上 `--no-verify`。
+
+```bash
+untis init                                         # 交互式：学校网址、用户名、密码、登录测试
+untis init --search "School name"                  # 改为按学校名称搜索
+untis init --url URL --username NAME < password   # 用于脚本（密码从 stdin 读取）
+```
+
+**或者手动设置：**
 
 1. 创建配置目录并复制示例配置：
 
