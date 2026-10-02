@@ -69,7 +69,7 @@ pipx install git+https://github.com/seesee010/webuntis-scraper
 untis --version
 ```
 
-**3. Configure** your school and login, see [Configuration](#configuration). Then:
+**3. Configure** your school and login with `untis init` (or by hand, see [Configuration](#configuration)). Then:
 
 ```bash
 untis -s --today
@@ -128,6 +128,16 @@ Config files are looked up in `~/.config/untis/` (or
 go to `~/.local/share/untis/`, so `untis` works from any directory.
 Without `~/.config/untis/config.json`, the project folder is used for
 everything instead (handy on Windows or for development).
+
+**Quick setup:** `untis init` asks for any WebUntis URL of your school (the login page, or any page of the new UI such as `…/today`; the school is then looked up via the public WebUntis school search), your username and password, tests the login, and writes `config.json` and `.env` (mode `600`). Existing files are updated, not replaced, and the password is never shown. For 2FA/SSO accounts, add `--no-verify`.
+
+```bash
+untis init                                         # interactive: school URL, username, password, login test
+untis init --search "School name"                  # find the school by name instead
+untis init --url URL --username NAME < password   # for scripts (password from stdin)
+```
+
+**Or by hand:**
 
 1. Create the config directory and copy the example config:
 
