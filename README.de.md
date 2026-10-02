@@ -2,29 +2,46 @@
 
 🇬🇧 [English](README.md) · 🇩🇪 [Deutsch](README.de.md) · 🇫🇷 [Français](README.fr.md) · 🇨🇳 [中文](README.zh.md)
 
-Playwright-basierter Scraper für WebUntis. Lädt Stundenplan, Prüfungen /
+Scraper für WebUntis (per HTTP, mit Playwright als Fallback). Lädt Stundenplan, Prüfungen /
 Klausuren, Hausaufgaben, Absenzen und Nachrichten und speichert sie als
 strukturiertes JSON.
 
 ## Wie es funktioniert
 
-Vor dem JSON-RPC-Endpoint sitzt eine WAF, die Requests ohne echten
-Browser-Kontext blockt. Deshalb läuft **alles** über Playwright:
+Standardmäßig (`--transport auto`) wird kein Browser gebraucht:
 
-1. **Login** über das echte Login-Formular (nur nötig, wenn keine gültige
-   Session in `sessions/storage_state.json` liegt).
+1. **Login** per HTTP über das WebUntis-Login-Formular
+   (`/WebUntis/j_spring_security_check`), nur wenn die gespeicherte
+   Session in `sessions/storage_state.json` abgelaufen ist. WebUntis
+   beendet inaktive Sessions nach einer Weile (beobachtet: ~40 min),
+   das passiert also oft.
 2. **Session-Check**: `GET /WebUntis/api/token/new` liefert nur bei
    eingeloggter Session ein JWT. Daraus kommen `person_id` und Rolle.
-3. **Alle API-Calls** laufen per `page.evaluate(fetch(...))` im Browser:
-   - Stundenplan: REST v1 `/api/rest/view/v1/timetable/entries`
-     (braucht das JWT als Bearer), Fallback JSON-RPC `getTimetable`
+3. **API-Calls** mit dem Session-Cookie (und dem JWT als Bearer für
+   REST v1):
+   - Stundenplan: REST v1 `/api/rest/view/v1/timetable/entries`,
+     Fallback JSON-RPC `getTimetable`
    - Prüfungen: `/api/exams`
    - Hausaufgaben: `/api/homeworks/lessons`
    - Abwesenheiten: `/api/classreg/absences/students`
    - Nachrichten: REST v1 `/api/rest/view/v1/messages`
 
-`playwright-stealth` patcht typische Bot-Detection-Vektoren
-(`navigator.webdriver`, `navigator.plugins`, `navigator.languages`, …).
+Bekommt der HTTP-Login eine unerwartete Antwort (z.B. WAF, 2FA oder
+SSO), weicht `untis` auf einen echten **Chromium über Playwright** aus:
+Der füllt das Login-Formular aus und führt die API-Calls in der Seite
+aus. Falsche Zugangsdaten werden im Browser *nicht* erneut versucht
+(das wäre nur ein zweiter Fehlversuch). Beide Wege nutzen dieselbe
+Session-Datei.
+
+| `--transport` | Verhalten |
+|---|---|
+| `auto` (Standard) | HTTP, Browser nur als Fallback |
+| `http` | nur HTTP, startet nie einen Browser |
+| `browser` | immer Playwright (auch bei `--no-headless`) |
+
+`playwright-stealth` patcht im Browser-Modus typische
+Bot-Detection-Vektoren (`navigator.webdriver`, `navigator.plugins`,
+`navigator.languages`, …).
 
 ## Installation
 
@@ -164,7 +181,7 @@ login page`), obwohl die Credentials stimmen, prüfe:
 2. **Sonderzeichen im Passwort?** `.env` unterstützt `=` und Quotes,
    aber führende Whitespaces werden getrimmt. Test mit `python -c "import
    os; print(repr(os.environ['UNTIS_PASSWORD']))"`.
-3. **CAPTCHA / SSO / 2FA?** → `python -m src --form-login --no-headless`
+3. **CAPTCHA / SSO / 2FA?** → `untis --transport browser --no-headless --form-login`
 4. **Screenshot:** `logs/login_failed.png` zeigt, was der Browser sah.
 5. **Verbose-Output:** `python -m src -v`.
 
@@ -241,7 +258,8 @@ src/
   main.py           # CLI
   config.py         # config.json + .env laden
   browser.py        # Playwright + stealth
-  untis_client.py   # Login + Session-Check + API-Calls im Browser
+  http_transport.py # Login + Requests per HTTP (Standard)
+  untis_client.py   # Login (HTTP oder Browser) + Session-Check + API-Calls
   normalize.py      # Rohdaten -> saubere Dicts
   scraper.py        # Orchestrierung
   exporter.py       # JSON-Ausgabe
