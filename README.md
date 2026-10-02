@@ -220,14 +220,14 @@ Every real run saves its data in `~/.local/share/untis/cache/last.json` (private
 `--short` prints one block per school day: time, subject, teacher, room,
 plus a marker for what happened to the lesson:
 
-| Marker | Meaning |
-|---|---|
-| `cancelled` | the lesson doesn't take place |
-| `removed` | the lesson takes place, but your class was taken out of it |
-| `no teacher` | the teacher was removed and nobody replaces them yet |
-| `changed` | something else changed, e.g. a substitute: `NEW (for OLD)` |
-| `exam` | exam lesson |
-| `event` | an event such as an excursion (`★ title`, with its teachers) |
+| Marker | Color | Meaning |
+|---|---|---|
+| `cancelled` | red, struck through | the lesson doesn't take place |
+| `removed` | gray, struck through | the lesson takes place, but your class was taken out of it |
+| `no teacher` | yellow | the teacher was removed and nobody replaces them yet |
+| `changed` | green; the substitute / new room in bold green | something else changed, e.g. a substitute: `NEW (for OLD)` |
+| `exam` | bold magenta | exam lesson |
+| `event` | bold blue | an event such as an excursion (`★ title`, with its teachers) |
 
 Removed teachers are struck through (`~OLD~` without colors). Each day
 header shows when school actually starts and ends that day, e.g.
@@ -252,7 +252,7 @@ holidays and days where every lesson is cancelled are skipped; the day
 header then says `(next school day)`.
 
 Below the days come upcoming exams, open homework and a line with
-absences and unread messages. Set `NO_COLOR=1` to disable colors.
+absences and unread messages. Colors are only used on a terminal; `--color always` forces them (e.g. for `less -R`), `--color never` or `NO_COLOR=1` turns them off. `untis --legend` prints what each color and marker means.
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
 inside the data directory (`~/.local/share/untis/`, or the project
