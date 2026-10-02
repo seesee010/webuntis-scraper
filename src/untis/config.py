@@ -17,22 +17,37 @@ from dotenv import dotenv_values
 
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+def _project_root(module_file: Path) -> Path | None:
+    """The repo checkout this module lives in (<root>/src/untis/config.py),
+    or None when installed as a package (pip/pipx), where the "project
+    folder" would be site-packages."""
+    root = Path(module_file).resolve().parents[2]
+    return root if (root / "pyproject.toml").exists() else None
 
 
 def _xdg_dir(var: str, fallback: str) -> Path:
     return Path(os.environ.get(var) or Path.home() / fallback) / "untis"
 
 
-# Installed use: config + .env in ~/.config/untis, sessions/out/logs in
-# ~/.local/share/untis. Without ~/.config/untis/config.json everything
-# stays in the project folder (dev checkout / Windows).
+def _pick_dirs(
+    xdg_config: Path, xdg_data: Path, project_root: Path | None,
+) -> tuple[Path, Path]:
+    """(config dir, data dir).
+
+    Normal use: config + .env in ~/.config/untis, sessions/out/logs in
+    ~/.local/share/untis. Only a dev checkout without
+    ~/.config/untis/config.json keeps everything in the project folder
+    (handy for development and on Windows).
+    """
+    if project_root is None or (xdg_config / "config.json").exists():
+        return xdg_config, xdg_data
+    return project_root, project_root
+
+
+PROJECT_ROOT = _project_root(Path(__file__))
 XDG_CONFIG_DIR = _xdg_dir("XDG_CONFIG_HOME", ".config")
 XDG_DATA_DIR = _xdg_dir("XDG_DATA_HOME", ".local/share")
-if (XDG_CONFIG_DIR / "config.json").exists():
-    CONFIG_DIR, DATA_DIR = XDG_CONFIG_DIR, XDG_DATA_DIR
-else:
-    CONFIG_DIR = DATA_DIR = PROJECT_ROOT
+CONFIG_DIR, DATA_DIR = _pick_dirs(XDG_CONFIG_DIR, XDG_DATA_DIR, PROJECT_ROOT)
 
 DEFAULT_CONFIG_PATH = CONFIG_DIR / "config.json"
 DEFAULT_ENV_PATH = CONFIG_DIR / ".env"

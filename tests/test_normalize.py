@@ -1,13 +1,10 @@
 """Tests for the normalizer."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 
 import pytest
-from src.normalize import (  # noqa: E402
+from untis.normalize import (  # noqa: E402
     normalize_absence,
     normalize_exam,
     normalize_homework,

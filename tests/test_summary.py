@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from src.summary import render_summary
+from untis.summary import render_summary
 
 # Fixed "now" far away from the fixtures, so the live marker never kicks in.
 NOT_LIVE = datetime(2000, 1, 1, 12, 0)

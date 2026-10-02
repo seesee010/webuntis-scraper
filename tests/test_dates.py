@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from src.dates import parse_date, pick_school_day, trim_timetable, week_range
+from untis.dates import parse_date, pick_school_day, trim_timetable, week_range
 
 FRI = date(2026, 10, 2)
 
@@ -81,7 +81,7 @@ def test_trim_timetable():
 
 
 # --- school-day counting (#42) --------------------------------------------
-from src.dates import merge_timetables, school_day_span, school_days  # noqa: E402
+from untis.dates import merge_timetables, school_day_span, school_days  # noqa: E402
 
 
 def test_school_days_skips_empty_cancelled_and_removed_days():

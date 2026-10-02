@@ -7,18 +7,14 @@ hard cases: WAF blocks, auth errors, success paths, error mapping.
 from __future__ import annotations
 
 import json
-import sys
 from datetime import date
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# Make src importable when running from the project root
-sys.path.insert(0, str(Path(__file__).parent))
 
-from src.untis_client import (  # noqa: E402
+from untis.untis_client import (  # noqa: E402
     AUTH_ERRORS,
     WebUntisClient,
     WebUntisError,
@@ -32,7 +28,7 @@ from src.untis_client import (  # noqa: E402
 # ----------------------------------------------------------------------
 @pytest.fixture
 def cfg() -> Any:
-    from src.config import ScraperConfig
+    from untis.config import ScraperConfig
     return ScraperConfig(
         server="htbla-wels",
         school="htbla-wels",
@@ -68,7 +64,7 @@ def fake_page() -> MagicMock:
 
 @pytest.fixture
 def client(cfg: Any, fake_session: MagicMock, fake_page: MagicMock) -> WebUntisClient:
-    from src.browser import BrowserSession
+    from untis.browser import BrowserSession
     c = WebUntisClient(cfg, fake_session)
     # Inject a fake page as if login() had completed.
     c._page = fake_page

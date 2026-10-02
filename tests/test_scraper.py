@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock
 
-from src.config import ScraperConfig
-from src.scraper import Scraper
+from untis.config import ScraperConfig
+from untis.scraper import Scraper
 
 
 def _grid(*days: tuple[str, str]) -> dict:

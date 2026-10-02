@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "webuntis-scraper"
+dynamic = ["version"]
+description = "untis: your WebUntis timetable, exams, homework and absences in the terminal"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27,<1",
+    "playwright>=1.40,<2",
+    "playwright-stealth>=2.0.2,<3",
+    "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9,<10",
+    "pytest-asyncio>=1.4,<2",
+]
+
+[project.scripts]
+untis = "untis.main:main"
+
+[project.urls]
+Repository = "https://github.com/seesee010/webuntis-scraper"
+Issues = "https://github.com/seesee010/webuntis-scraper/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "untis.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# Tests import `untis` straight from the checkout, no install needed.
+pythonpath = ["src"]

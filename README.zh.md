@@ -42,32 +42,49 @@ WebUntis 抓取工具（使用普通 HTTP，必要时用 Playwright 作为备用
 
 ## 安装
 
-Linux / macOS：
+### 使用 pipx（推荐）
+
+把 `untis` 安装为命令，并使用独立的环境：
+
+```bash
+pipx install git+https://github.com/seesee010/webuntis-scraper
+untis --version
+```
+
+只有浏览器备用方案（`--transport browser`、双重验证/SSO）才需要 Chromium：
+
+```bash
+pipx inject --include-apps webuntis-scraper playwright   # 只用于浏览器备用方案
+playwright install chromium
+```
+
+### 从源码目录安装（开发）
+
+Linux / macOS:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 playwright install chromium
+pytest                     # 运行测试
 ```
 
-Windows（PowerShell）：
+Windows (PowerShell):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -e ".[dev]"
 playwright install chromium
 ```
 
-## 安装为 `untis` 命令（Linux / macOS）
-
-`bin/untis` 是一个小的启动脚本，它会用项目的 `.venv` 运行抓取工具。把它链接到 `PATH` 中的某个目录
+`bin/untis` 会用源码目录中的 `.venv` 运行程序，不需要安装。把它链接到 `PATH` 中的某个目录
 （大多数 Linux 发行版的 `PATH` 都包含 `~/.local/bin`）：
 
 ```bash
 ln -s "$PWD/bin/untis" ~/.local/bin/untis
-untis -s --days-forward 0
+untis -s --today
 ```
 
 ## 配置
@@ -112,10 +129,10 @@ untis -s --days-forward 0
 
 ```bash
 # 默认运行（无界面，重复使用已保存的会话）
-python -m src
+untis
 
 # 忽略已保存的会话，重新登录
-python -m src --form-login --no-headless --clear-session
+untis --form-login --no-headless --clear-session
 
 # 其他时间范围：今天加上接下来的 4 个上课日
 # （周末、假期和所有课都取消的日子不计算在内）
@@ -132,11 +149,11 @@ untis -s --next-week
 untis -s --date 12.10.     # 也可以写 12.10.2026 或 2026-10-12
 
 # 同时保留 API 的原始数据
-python -m src --keep-raw -v
+untis --keep-raw -v
 
 # 在终端里显示简洁的每日视图（仍然会写入 JSON）
-python -m src --short                   # 或 -s
-python -m src -s --days-forward 0       # 只看今天
+untis --short                   # 或 -s
+untis -s --days-forward 0       # 只看今天
 ```
 
 `--short` 为每个上课日显示一块内容：时间、科目、老师、教室，以及这节课发生了什么：
@@ -185,7 +202,7 @@ python -m src -s --days-forward 0       # 只看今天
 2. **密码里有特殊字符吗？** `.env` 支持 `=` 和引号，但开头的空格会被删除。
 3. **有验证码 / SSO / 双重验证（2FA）吗？** → `untis --transport browser --no-headless --form-login`
 4. **截图：** 数据目录中的 `logs/login_failed.png` 显示了浏览器看到的页面。
-5. **详细输出：** `python -m src -v`。
+5. **详细输出：** `untis -v`。
 
 ### 退出码
 
@@ -251,10 +268,12 @@ python -m src -s --days-forward 0       # 只看今天
 ## 项目结构
 
 ```
+pyproject.toml      # 包信息、依赖、`untis` 命令
 bin/
-  untis             # 放到 PATH 中的启动脚本
-src/
-  __init__.py
+  untis             # 源码目录的启动脚本
+src/untis/
+  __init__.py       # 版本
+  __main__.py       # python -m untis
   main.py           # 命令行入口
   config.py         # 读取 config.json 和 .env
   browser.py        # Playwright + stealth

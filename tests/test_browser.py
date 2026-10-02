@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src import browser as browser_mod
-from src.browser import BrowserSession
-from src.config import ScraperConfig
+from untis import browser as browser_mod
+from untis.browser import BrowserSession
+from untis.config import ScraperConfig
 
 
 @pytest.fixture
