@@ -90,3 +90,32 @@ def trim_timetable(timetable: dict[str, Any], start: date, end: date) -> dict[st
     if isinstance(raw, dict) and "days" in raw:
         out["raw"] = dict(raw, days=[d for d in raw["days"] if s <= (d.get("date") or "") <= e])
     return out
+
+
+def school_days(timetable: dict[str, Any]) -> list[date]:
+    """Sorted days on which at least one entry takes place for the user."""
+    return [date.fromisoformat(d) for d in sorted(active_spans(timetable)) if d]
+
+
+def school_day_span(n: int) -> int:
+    """Calendar days that usually contain n school days (weekends plus a
+    small buffer). Holidays are handled by fetching more if needed."""
+    if n <= 0:
+        return 0
+    return n + 2 * ((n + 4) // 5) + 2
+
+
+def merge_timetables(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """Combine two normalized timetables of adjacent ranges."""
+    out = {**b, **a}        # metadata (source, own_classes, …) from either
+    for key in ("days", "lessons"):
+        if key in a or key in b:
+            out[key] = sorted(
+                (a.get(key) or []) + (b.get(key) or []),
+                key=lambda x: (x.get("date") or "", x.get("start_time") or ""),
+            )
+    out["start"] = min(a.get("start") or "9", b.get("start") or "9")
+    out["end"] = max(a.get("end") or "", b.get("end") or "")
+    if isinstance(a.get("raw"), dict) and isinstance(b.get("raw"), dict):
+        out["raw"] = {"days": (a["raw"].get("days") or []) + (b["raw"].get("days") or [])}
+    return out

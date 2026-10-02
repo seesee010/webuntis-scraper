@@ -80,12 +80,17 @@ def _parse_args() -> argparse.Namespace:
         help="Include raw API payloads in the output JSON.",
     )
     ap.add_argument(
-        "--days-back", type=int, default=None,
-        help="Override config: how many days in the past to scrape.",
+        "--days-back", type=_non_negative_int, default=None, metavar="N",
+        help="Also show the previous N school days (default from config: 0).",
     )
     ap.add_argument(
-        "--days-forward", type=int, default=None,
-        help="Override config: how many days in the future to scrape.",
+        "--days-forward", type=_non_negative_int, default=None, metavar="N",
+        help="Show today plus the next N school days (default from config: 14). "
+             "Weekends and holidays don't count.",
+    )
+    ap.add_argument(
+        "--calendar-days", action="store_true",
+        help="Count --days-back/--days-forward in calendar days instead of school days.",
     )
     when = ap.add_argument_group(
         "date shortcuts", "Pick the window directly (instead of --days-back/--days-forward).",
@@ -116,6 +121,16 @@ def _parse_args() -> argparse.Namespace:
     if shortcut and (args.days_back is not None or args.days_forward is not None):
         ap.error("date shortcuts can't be combined with --days-back/--days-forward")
     return args
+
+
+def _non_negative_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
+    if value < 0:
+        raise argparse.ArgumentTypeError("must be 0 or more")
+    return value
 
 
 def _date_arg(text: str) -> date:
@@ -150,6 +165,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         cfg.days_back = args.days_back
     if args.days_forward is not None:
         cfg.days_forward = args.days_forward
+    if args.calendar_days:
+        cfg.calendar_days = True
     _apply_date_shortcuts(cfg, args, date.today())
 
     async with BrowserSession(cfg, fresh=args.clear_session) as session:

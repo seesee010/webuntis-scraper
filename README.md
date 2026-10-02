@@ -121,8 +121,11 @@ python -m src
 # Ignore the saved session and log in again
 python -m src --form-login --no-headless --clear-session
 
-# Different time window
-python -m src --days-back 7 --days-forward 30
+# Different time window: today plus the next 4 school days
+# (weekends, holidays and fully cancelled days don't count)
+untis -s --days-forward 4
+untis -s --days-back 2 --days-forward 0    # the last 2 school days + today
+untis -s --days-forward 4 --calendar-days  # count calendar days instead
 
 # Date shortcuts (instead of --days-back / --days-forward)
 untis -s --today

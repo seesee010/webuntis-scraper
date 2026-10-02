@@ -125,8 +125,11 @@ python -m src
 # Ignorer la session enregistrée et se reconnecter
 python -m src --form-login --no-headless --clear-session
 
-# Autre période
-python -m src --days-back 7 --days-forward 30
+# Autre période : aujourd'hui plus les 4 prochains jours de cours
+# (les week-ends, les vacances et les jours entièrement annulés ne comptent pas)
+untis -s --days-forward 4
+untis -s --days-back 2 --days-forward 0    # les 2 derniers jours de cours + aujourd'hui
+untis -s --days-forward 4 --calendar-days  # compter en jours calendaires
 
 # Raccourcis de date (au lieu de --days-back / --days-forward)
 untis -s --today

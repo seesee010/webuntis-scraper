@@ -1,7 +1,7 @@
 """Tests for the date shortcut helpers."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -78,3 +78,58 @@ def test_trim_timetable():
     assert [d["date"] for d in out["raw"]["days"]] == ["2026-10-06"]
     assert out["start"] == out["end"] == "2026-10-06"
     assert len(TT["days"]) == 4                 # original untouched
+
+
+# --- school-day counting (#42) --------------------------------------------
+from src.dates import merge_timetables, school_day_span, school_days  # noqa: E402
+
+
+def test_school_days_skips_empty_cancelled_and_removed_days():
+    assert school_days(TT) == [date(2026, 10, 2), date(2026, 10, 6)]
+
+
+def test_school_days_from_jsonrpc_lessons():
+    tt = {"lessons": [
+        {"date": "2026-10-06", "start_time": "07:50", "end_time": "08:40"},
+        {"date": "2026-10-05", "start_time": "07:50", "end_time": "08:40",
+         "is_cancelled": True},
+    ]}
+    assert school_days(tt) == [date(2026, 10, 6)]
+
+
+def test_school_days_empty():
+    assert school_days({}) == []
+
+
+@pytest.mark.parametrize("n, span", [(-1, 0), (0, 0), (1, 5), (4, 8), (5, 9), (10, 16)])
+def test_school_day_span(n, span):
+    assert school_day_span(n) == span
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 4, 5, 6, 10, 14])
+@pytest.mark.parametrize("weekday", range(7))
+def test_school_day_span_covers_n_weekdays_from_any_day(n, weekday):
+    """Without holidays, the first guess always contains n school days."""
+    today = date(2026, 10, 5) + timedelta(days=weekday)      # Mon..Sun
+    span = school_day_span(n)
+    days = [today + timedelta(days=i) for i in range(1, span + 1)]
+    assert len([d for d in days if d.weekday() < 5]) >= n
+
+
+def test_merge_timetables():
+    a = {"start": "2026-10-01", "end": "2026-10-04", "days": [{"date": "2026-10-02"}],
+         "raw": {"days": [{"date": "2026-10-02"}]}, "own_classes": ["CLASS-A"]}
+    b = {"start": "2026-10-05", "end": "2026-10-11", "days": [{"date": "2026-10-05"}],
+         "raw": {"days": [{"date": "2026-10-05"}]}}
+    out = merge_timetables(b, a)                     # order doesn't matter
+    assert [d["date"] for d in out["days"]] == ["2026-10-02", "2026-10-05"]
+    assert (out["start"], out["end"]) == ("2026-10-01", "2026-10-11")
+    assert len(out["raw"]["days"]) == 2
+    assert out["own_classes"] == ["CLASS-A"]         # kept from either side
+    assert "lessons" not in out
+
+
+def test_merge_timetables_lessons():
+    a = {"start": "2026-10-01", "end": "2026-10-01", "lessons": [{"date": "2026-10-01"}]}
+    b = {"start": "2026-10-02", "end": "2026-10-02", "lessons": [{"date": "2026-10-02"}]}
+    assert len(merge_timetables(a, b)["lessons"]) == 2

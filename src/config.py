@@ -67,6 +67,8 @@ class ScraperConfig:
     start_date: date | None = None
     end_date: date | None = None
     pick_day: str | None = None    # "tomorrow" | "next": first school day
+    # days_back/days_forward count school days; True = plain calendar days
+    calendar_days: bool = False
 
     # Modules to enable
     scrape_timetable: bool = True
@@ -170,7 +172,7 @@ def load_config(
         if field_name in {
             "headless", "pretty_json", "include_raw",
             "scrape_timetable", "scrape_exams", "scrape_homework",
-            "scrape_absences", "scrape_messages",
+            "scrape_absences", "scrape_messages", "calendar_days",
         }:
             current = getattr(cfg, field_name, False)
             setattr(cfg, field_name, _coerce_bool(v, current))
@@ -188,6 +190,10 @@ def load_config(
             log.debug("Unknown config key: %s", k)
 
     cfg.derived_urls()
+
+    for key in ("days_back", "days_forward"):
+        if getattr(cfg, key) < 0:
+            raise ConfigError(f"{key} must be 0 or more, not {getattr(cfg, key)}")
 
     if cfg.transport not in TRANSPORTS:
         raise ConfigError(

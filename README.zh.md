@@ -117,8 +117,11 @@ python -m src
 # 忽略已保存的会话，重新登录
 python -m src --form-login --no-headless --clear-session
 
-# 其他时间范围
-python -m src --days-back 7 --days-forward 30
+# 其他时间范围：今天加上接下来的 4 个上课日
+# （周末、假期和所有课都取消的日子不计算在内）
+untis -s --days-forward 4
+untis -s --days-back 2 --days-forward 0    # 最近 2 个上课日 + 今天
+untis -s --days-forward 4 --calendar-days  # 改为按日历天数计算
 
 # 日期快捷方式（代替 --days-back / --days-forward）
 untis -s --today

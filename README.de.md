@@ -124,8 +124,11 @@ python -m src
 # Gespeicherte Session ignorieren und neu einloggen
 python -m src --form-login --no-headless --clear-session
 
-# Anderes Zeitfenster
-python -m src --days-back 7 --days-forward 30
+# Anderes Zeitfenster: heute plus die nächsten 4 Schultage
+# (Wochenenden, Ferien und komplett entfallene Tage zählen nicht)
+untis -s --days-forward 4
+untis -s --days-back 2 --days-forward 0    # die letzten 2 Schultage + heute
+untis -s --days-forward 4 --calendar-days  # stattdessen Kalendertage zählen
 
 # Datums-Kürzel (statt --days-back / --days-forward)
 untis -s --today
