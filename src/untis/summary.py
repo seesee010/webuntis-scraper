@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import sys
+import textwrap
 from datetime import date, datetime
 from typing import Any, Optional
 
@@ -593,9 +594,11 @@ def _relative_day(day: date, today: date) -> str:
 
 def render_tests(
     payload: dict[str, Any], color: Optional[bool] = None, today: Optional[date] = None,
-    now: Optional[datetime] = None,
+    now: Optional[datetime] = None, upcoming_only: bool = False,
 ) -> str:
-    """Only the exams/tests of the window, sorted by date (--tests)."""
+    """Only the exams/tests of the window, sorted by date (--tests).
+    `upcoming_only` hides past ones (--tests together with --homework
+    fetches the whole school year)."""
     st = _Style(use_color() if color is None else color)
     today = today or date.today()
     section = payload.get("exams") or {}
@@ -604,7 +607,10 @@ def render_tests(
     window = (payload.get("meta") or {}).get("window") or {}
     start = date.fromisoformat(window.get("start") or today.isoformat())
     end = date.fromisoformat(window.get("end") or today.isoformat())
-    items = sorted((e for e in section.get("exams") or [] if e.get("date")),
+    if upcoming_only:
+        start = max(start, today)
+    items = sorted((e for e in section.get("exams") or []
+                    if e.get("date") and e["date"] >= start.isoformat()),
                    key=lambda e: (e["date"], e.get("start_time") or ""))
     n = len(items)
     noun = "test" if n == 1 else "tests"
@@ -638,4 +644,70 @@ def render_tests(
         if e.get("grade"):
             line += "  " + st.bold(f"grade: {e['grade']}")
         lines.append(st.dim(_plain(line)) if day < today else line)
+    return "\n".join(lines)
+
+
+# --- --homework (#4) ---------------------------------------------------------
+def _homework_order(h: dict) -> tuple:
+    """Open homework first (by due date), then completed ones."""
+    return (bool(h.get("completed")), h.get("due_date") or h.get("date") or "")
+
+
+def render_homework(
+    payload: dict[str, Any], color: Optional[bool] = None, today: Optional[date] = None,
+    now: Optional[datetime] = None, width: int | None = None,
+) -> str:
+    """All homework of the window (--homework): open by due date with
+    overdue ones in red, then completed ones dimmed with a ✓. The full
+    text is wrapped to the terminal width."""
+    st = _Style(use_color() if color is None else color)
+    today = today or date.today()
+    width = width or shutil.get_terminal_size((100, 24)).columns
+    section = payload.get("homework") or {}
+    if "error" in section:
+        return st.red(f"homework: {section['error']}")
+    items = sorted(section.get("items") or [], key=_homework_order)
+    open_ = [h for h in items if not h.get("completed")]
+    overdue = [h for h in open_ if (h.get("due_date") or "9") < today.isoformat()]
+    header = st.bold(f"Homework · {len(open_)} open · {len(overdue)} overdue · "
+                     f"{len(items) - len(open_)} done")
+    meta = payload.get("meta") or {}
+    if meta.get("cached_at"):
+        header += "  " + st.yellow(f"({_cache_age(meta['cached_at'], now or datetime.now())})")
+    lines = [header]
+    if not items:
+        return "\n".join(lines + ["", st.dim("No homework in this window.")])
+    subj_w = max(len(_shorts(h.get("subjects") or [])) for h in items)
+    indent = " " * 4
+    for h in items:
+        due = h.get("due_date")
+        subject = _shorts(h.get("subjects") or [])
+        teacher = _shorts(h.get("teachers") or [])
+        if h.get("completed"):
+            status = "✓"
+        elif due and due < today.isoformat():
+            status = "overdue"
+        else:
+            status = "due"
+        when = _fmt_day(due) if due else "?"
+        rel = _relative_day(date.fromisoformat(due), today) if due and status != "✓" else ""
+        row = f"{status:<8} {when}  {subject.ljust(subj_w)}  {teacher}"
+        row = (row + ("  " + rel if rel else "")).rstrip()
+        body = []
+        for para in (h.get("text") or "").splitlines() or [""]:
+            body += textwrap.wrap(para, max(width - len(indent), 20)) or ([""] if para else [])
+        body = [indent + b for b in body if b.strip()]
+        if h.get("remark"):
+            body.append(indent + "Note: " + " ".join(h["remark"].split()))
+        if h.get("attachments"):
+            n = len(h["attachments"])
+            body.append(indent + f"📎 {n} attachment{'s' if n != 1 else ''}")
+        block = [row] + body
+        lines.append("")
+        if status == "✓":
+            lines += [st.dim(_plain(b)) for b in block]
+        elif status == "overdue":
+            lines += [st.red(row)] + body
+        else:
+            lines += [st.bold(row)] + body
     return "\n".join(lines)

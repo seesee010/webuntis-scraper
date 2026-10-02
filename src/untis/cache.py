@@ -76,8 +76,9 @@ def offline_window(
     hi = date.fromisoformat(window.get("end") or today.isoformat())
     if cfg.start_date:
         return cfg.start_date, cfg.end_date or cfg.start_date, ""
-    if cfg.until_school_year_end:          # --tests: up to the cached end
-        return today, max(hi, today), ""
+    if cfg.until_school_year_end:          # --tests/--homework: the cached range
+        start = lo if cfg.from_school_year_start else today
+        return start, max(hi, today), ""
     if cfg.pick_day:
         first = today + timedelta(days=1) if cfg.pick_day == "tomorrow" else today
         day = pick_school_day(tt, first, now if cfg.pick_day == "next" else None)

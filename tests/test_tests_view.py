@@ -140,7 +140,7 @@ def test_tests_conflicts(capsys, argv):
                                          (["-t", "--days-forward", "3"], False)])
 def test_only_tests_config(argv, until):
     cfg = ScraperConfig(server="s", school="sc")
-    main_mod._only_tests(cfg, parse(argv))
+    main_mod._only_sections(cfg, parse(argv))
     assert cfg.scrape_exams and not (cfg.scrape_timetable or cfg.scrape_homework
                                      or cfg.scrape_absences or cfg.scrape_messages)
     assert cfg.until_school_year_end is until

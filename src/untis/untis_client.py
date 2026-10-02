@@ -184,13 +184,18 @@ def _time_grid(app_data: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
-def _school_year_end(app_data: dict[str, Any]) -> Optional[date]:
-    """Last day of the current school year from /app/data, if present."""
-    end = (((app_data.get("currentSchoolYear") or {}).get("dateRange") or {}).get("end"))
+def _school_year_bound(app_data: dict[str, Any], which: str) -> Optional[date]:
+    """First ("start") or last ("end") day of the current school year from
+    /app/data, if present."""
+    value = (((app_data.get("currentSchoolYear") or {}).get("dateRange") or {}).get(which))
     try:
-        return date.fromisoformat(end) if end else None
+        return date.fromisoformat(value) if value else None
     except ValueError:
         return None
+
+
+def _school_year_end(app_data: dict[str, Any]) -> Optional[date]:
+    return _school_year_bound(app_data, "end")
 
 
 class WebUntisError(RuntimeError):
@@ -215,6 +220,7 @@ class WebUntisClient:
         self._token: Optional[str] = None
         self.time_grid: list[dict[str, str]] = []
         self.school_year_end: Optional[date] = None
+        self.school_year_start: Optional[date] = None
         self._logged_in = False
         self._rpc_id = 0
         self._last_request_ts = 0.0
@@ -446,7 +452,8 @@ class WebUntisClient:
         self._person_type, self._resource_type = ELEMENT_TYPES[kind]
         self._user_display = person.get("displayName") or claims.get("username")
         self.time_grid = _time_grid(app_data)
-        self.school_year_end = _school_year_end(app_data)
+        self.school_year_start = _school_year_bound(app_data, "start")
+        self.school_year_end = _school_year_bound(app_data, "end")
         log.debug(
             "Session belongs to %s (person_id=%s, type=%s)",
             self._user_display, self._person_id, kind,
