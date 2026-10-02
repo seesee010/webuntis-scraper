@@ -52,6 +52,7 @@ import httpx
 from .browser import BrowserSession
 from .config import LOGS_DIR, ScraperConfig
 from .http_transport import HttpTransport
+from .privacy import make_private
 
 if TYPE_CHECKING:       # Playwright is imported lazily (slow import)
     from playwright.async_api import Page
@@ -365,6 +366,7 @@ class WebUntisClient:
         try:
             path = LOGS_DIR / f"{name}.png"
             await self._page.screenshot(path=str(path), full_page=True)
+            make_private(path)           # may show your name / photo
             log.info("Saved debug screenshot to %s", path)
         except Exception:
             pass

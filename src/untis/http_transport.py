@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -22,6 +21,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from .config import ScraperConfig
+from .privacy import write_private_text
 
 log = logging.getLogger(__name__)
 
@@ -133,12 +133,7 @@ class HttpTransport:
             "secure": bool(c.secure),
             "sameSite": "Lax",
         } for c in self._client.cookies.jar]
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"cookies": cookies, "origins": origins}, f)
-        os.replace(tmp, path)
+        write_private_text(path, json.dumps({"cookies": cookies, "origins": origins}))
         log.debug("Saved %d cookies to %s", len(cookies), path)
 
     async def aclose(self) -> None:

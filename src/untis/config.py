@@ -15,6 +15,8 @@ from typing import Any
 
 from dotenv import dotenv_values
 
+from .privacy import ensure_private_dir, is_readable_by_others, make_private, tighten_dir
+
 log = logging.getLogger(__name__)
 
 def _project_root(module_file: Path) -> Path | None:
@@ -94,6 +96,9 @@ class ScraperConfig:
 
     # "auto": plain HTTP, browser only as fallback; "http"; "browser"
     transport: str = "auto"
+    # Chromium's --no-sandbox etc. Only needed in some Docker/root setups;
+    # enabled automatically when running as root.
+    browser_no_sandbox: bool = False
 
     # Browser behaviour
     headless: bool = True
@@ -157,6 +162,24 @@ def _load_json(path: Path) -> dict:
         return {}
 
 
+def _secure_data_dirs(cfg: ScraperConfig, env_path: Path) -> None:
+    """Sessions, output and logs hold personal data: owner-only dirs
+    (700) and files (600). Only our own sub-directories are touched, never
+    the project folder itself or a custom output_dir chosen by the user."""
+    for d in (SESSIONS_DIR, LOGS_DIR):
+        ensure_private_dir(d)
+        tighten_dir(d)
+    out = Path(cfg.output_dir)
+    if out.resolve() == OUT_DIR.resolve():
+        ensure_private_dir(out)
+        tighten_dir(out)
+    else:
+        out.mkdir(parents=True, exist_ok=True)
+    make_private(Path(cfg.storage_state_path))
+    if is_readable_by_others(env_path):
+        log.warning("%s is readable by other users; run: chmod 600 %s", env_path, env_path)
+
+
 def load_config(
     config_path: Path | str = DEFAULT_CONFIG_PATH,
     env_path: Path | str = DEFAULT_ENV_PATH,
@@ -188,6 +211,7 @@ def load_config(
             "headless", "pretty_json", "include_raw",
             "scrape_timetable", "scrape_exams", "scrape_homework",
             "scrape_absences", "scrape_messages", "calendar_days",
+            "browser_no_sandbox",
         }:
             current = getattr(cfg, field_name, False)
             setattr(cfg, field_name, _coerce_bool(v, current))
@@ -235,8 +259,7 @@ def load_config(
     elif cfg.password and not cfg.username:
         log.warning("Password is set but username is empty")
 
-    for d in (SESSIONS_DIR, OUT_DIR, LOGS_DIR):
-        d.mkdir(parents=True, exist_ok=True)
+    _secure_data_dirs(cfg, Path(env_path))
 
     pw_set = bool(cfg.password)
     log.info(

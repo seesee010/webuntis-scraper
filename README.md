@@ -299,6 +299,21 @@ add `-v` for the full traceback.
 }
 ```
 
+## Security
+
+`untis` stores personal data, so it keeps it private to your user account:
+
+- **Password:** `~/.config/untis/.env`. Make it readable only by you (`chmod 600`). `untis` warns if other users can read it.
+- **Login session:** the cookies in `~/.local/share/untis/sessions/storage_state.json` let anyone with the file act as you until the session expires. The file is created with mode `600` in a `700` directory.
+- **Output and debug files:** `out/` (your name, timetable, absences) and `logs/` (screenshots of the WebUntis page) are private as well, and files from older versions are fixed on the next run. Check screenshots before sharing them.
+- **Browser sandbox:** Chromium runs with its sandbox enabled. Only in Docker or similar setups that need it, set `"browser_no_sandbox": true` in `config.json` (it is enabled automatically when running as root).
+
+```bash
+chmod 600 ~/.config/untis/.env                            # only you can read your password
+untis --clear-session                                     # log out: drop the saved session
+rm ~/.local/share/untis/sessions/storage_state.json       # the same, by hand
+```
+
 ## Notes
 
 - **2FA / CAPTCHA**: If your school requires OTP, run once with

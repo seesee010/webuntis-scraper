@@ -286,6 +286,21 @@ untis -s --days-forward 0       # 只看今天
 }
 ```
 
+## 安全
+
+`untis` 会保存个人数据，因此只允许你的用户账户读取这些数据：
+
+- **密码：** `~/.config/untis/.env`。请设置为只有你能读取（`chmod 600`）。如果其他用户可以读取，`untis` 会发出警告。
+- **登录会话：** 任何拿到 `~/.local/share/untis/sessions/storage_state.json` 的人，都可以在会话过期前冒充你。该文件以 `600` 权限创建，所在目录为 `700`。
+- **输出和调试文件：** `out/`（你的姓名、课表、缺勤记录）和 `logs/`（WebUntis 页面截图）同样是私有的，旧版本留下的文件会在下次运行时自动修正。分享截图前请先检查。
+- **浏览器沙箱：** Chromium 默认启用沙箱。只有在 Docker 等需要的环境中，才在 `config.json` 中设置 `"browser_no_sandbox": true`（以 root 运行时会自动启用）。
+
+```bash
+chmod 600 ~/.config/untis/.env                            # 只有你能读取密码
+untis --clear-session                                     # 退出登录：删除保存的会话
+rm ~/.local/share/untis/sessions/storage_state.json       # 手动执行同样的操作
+```
+
 ## 说明
 
 - **双重验证 / 验证码**：如果学校要求一次性验证码（OTP），先用 `--no-headless --clear-session`
