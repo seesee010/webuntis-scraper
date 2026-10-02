@@ -159,6 +159,20 @@ Removed teachers are struck through (`~OLD~` without colors). Each day
 header shows when school actually starts and ends that day, e.g.
 `Mon 05.10.  07:50–13:25`.
 
+For today, the day view also shows where you are right now: the running
+lesson gets a `▶` and the time left, lessons that are over are dimmed, and
+in a break or before school a "now" line shows when the next lesson starts.
+Cancelled lessons are never marked as current, and after school nothing is
+marked.
+
+```
+  07:50–09:35  MATH  TCH1  R101                       (dimmed: already over)
+▶ 09:40–10:30  GER   TCH2  R101   now · 18 min left
+  10:45–11:35  PROG  TCH3  R101
+
+  ──── now 10:37 · next in 8 min ────                 (in a break)
+```
+
 `--tomorrow` and `--next` look at the real timetable, so weekends,
 holidays and days where every lesson is cancelled are skipped; the day
 header then says `(next school day)`.

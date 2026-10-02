@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Optional
+
+_ANSI = re.compile(r"\033\[[0-9;]*m")
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -131,6 +134,65 @@ def _label(r: dict) -> str:
     return _STATUS_LABELS.get(r.get("status") or "", "")
 
 
+def _plain(text: str) -> str:
+    """Strip ANSI codes, so a whole line can be restyled (dim/strike)
+    without inner resets cutting the outer style short."""
+    return _ANSI.sub("", text)
+
+
+def _fmt_minutes(minutes: int) -> str:
+    """5 -> "5 min", 65 -> "1 h 5 min", 120 -> "2 h"."""
+    minutes = max(minutes, 0)
+    hours, mins = divmod(minutes, 60)
+    if not hours:
+        return f"{mins} min"
+    return f"{hours} h {mins} min" if mins else f"{hours} h"
+
+
+def _minutes_between(hm_from: str, hm_to: str) -> int:
+    """Minutes from "HH:MM" to "HH:MM" on the same day."""
+    (h1, m1), (h2, m2) = (map(int, hm_from.split(":")), map(int, hm_to.split(":")))
+    return (h2 * 60 + m2) - (h1 * 60 + m1)
+
+
+def _takes_place(r: dict) -> bool:
+    return not r.get("is_cancelled") and not r.get("is_removed")
+
+
+def _live_state(day_iso: str, rows: list[dict], now: Optional[datetime]) -> Optional[dict]:
+    """Where "now" is on today's (time-sorted) rows.
+
+    Returns None unless `day_iso` is today and school isn't over yet.
+    Otherwise: {"now": "HH:MM", "past": set of row indexes that ended,
+    "current": set of indexes running right now (only lessons that take
+    place), "line_before": index to put the "now" line in front of, or
+    None while a lesson is running, "next_in": minutes until it}.
+    """
+    if now is None or day_iso != now.date().isoformat():
+        return None
+    hm = now.strftime("%H:%M")
+    active = [r for r in rows if _takes_place(r) and r.get("start") and r.get("end")]
+    if not active or hm >= max(r["end"] for r in active):
+        return None                                     # no school / school is over
+    state: dict[str, Any] = {"now": hm, "past": set(), "current": set(),
+                             "line_before": None, "next_in": None}
+    for i, r in enumerate(rows):
+        if r.get("end") and r["end"] <= hm:
+            state["past"].add(i)
+        elif _takes_place(r) and r.get("start") and r["start"] <= hm < r.get("end", ""):
+            state["current"].add(i)
+    if not state["current"]:
+        upcoming = [(i, r) for i, r in enumerate(rows)
+                    if _takes_place(r) and r.get("start", "") > hm]
+        if upcoming:
+            i, r = upcoming[0]
+            # Put the line before every row that hasn't started yet (also
+            # cancelled ones in that slot), not just before the next lesson.
+            state["line_before"] = min(j for j, x in enumerate(rows) if x.get("start", "") > hm)
+            state["next_in"] = _minutes_between(hm, r["start"])
+    return state
+
+
 def _day_header(day_iso: str, rows: list[dict], note: str, st: _Style) -> str:
     """"Mon 05.10.  07:50–13:25" – span of what actually takes place."""
     header = st.bold(_fmt_day(day_iso))
@@ -142,7 +204,10 @@ def _day_header(day_iso: str, rows: list[dict], note: str, st: _Style) -> str:
     return header
 
 
-def _render_timetable(timetable: dict, st: _Style, window: dict | None = None) -> list[str]:
+def _render_timetable(
+    timetable: dict, st: _Style, window: dict | None = None,
+    now: Optional[datetime] = None,
+) -> list[str]:
     days = _rows_from_grid(timetable) if "days" in timetable else _rows_from_lessons(timetable)
     days = {d: rows for d, rows in days.items() if d and rows}
     window = window or {}
@@ -160,8 +225,15 @@ def _render_timetable(timetable: dict, st: _Style, window: dict | None = None) -
         note = window.get("note", "") if day_iso == window.get("start") else ""
         out.append("")
         out.append(_day_header(day_iso, days[day_iso], note, st))
+        rows = sorted(days[day_iso], key=lambda r: (r["start"], r["subject"]))
+        live = _live_state(day_iso, rows, now)
         prev_slot = None
-        for r in sorted(days[day_iso], key=lambda r: (r["start"], r["subject"])):
+        for idx, r in enumerate(rows):
+            if live and live["line_before"] == idx:
+                out.append("  " + st.cyan(
+                    f"──── now {live['now']} · next in {_fmt_minutes(live['next_in'])} ────"))
+            is_current = bool(live) and idx in live["current"]
+            is_past = bool(live) and idx in live["past"]
             slot = (r["start"], r["end"])
             time = f"{r['start']}–{r['end']}" if slot != prev_slot else ""
             prev_slot = slot
@@ -169,7 +241,10 @@ def _render_timetable(timetable: dict, st: _Style, window: dict | None = None) -
             label = _label(r)
             t_plain, t_styled = _teachers(r["teachers"], st)
 
-            line = f"  {time:<11}  "
+            gutter = st.bold(st.yellow("▶")) + " " if is_current else "  "
+            # Pad on the visible width; ANSI codes would break f"{x:<11}".
+            time_cell = (st.bold(time) if is_current else time) + " " * (11 - len(time))
+            line = gutter + time_cell + "  "
             if r["subject"] and not r.get("is_event"):
                 line += _pad(st.bold(r["subject"]), r["subject"], subj_w) + "  "
                 line += _pad(t_styled, t_plain, teach_w) + "  "
@@ -188,15 +263,20 @@ def _render_timetable(timetable: dict, st: _Style, window: dict | None = None) -
             if not label:
                 line = line.rstrip()
             if label == "cancelled":
-                line = st.dim(st.strike(line)) + "  " + st.red(label)
+                line = st.dim(st.strike(_plain(line))) + "  " + st.red(label)
             elif label == "removed":
-                line = st.dim(st.strike(line)) + "  " + st.dim(label)
+                line = st.dim(st.strike(_plain(line))) + "  " + st.dim(label)
             elif label == "exam":
                 line += "  " + st.magenta(label)
             elif label == "event":
                 line += "  " + st.blue(label)
             elif label:
                 line += "  " + st.yellow(label)
+            if is_current:
+                left = _minutes_between(live["now"], r["end"])
+                line += "  " + st.bold(st.yellow(f"now · {_fmt_minutes(left)} left"))
+            elif is_past and label not in ("cancelled", "removed"):
+                line = st.dim(_plain(line))
             out.append(line)
     return out
 
@@ -251,8 +331,14 @@ def _count_line(payload: dict, st: _Style) -> str:
     return st.dim(" · ").join(parts)
 
 
-def render_summary(payload: dict[str, Any], color: Optional[bool] = None) -> str:
+def render_summary(
+    payload: dict[str, Any], color: Optional[bool] = None,
+    now: Optional[datetime] = None,
+) -> str:
+    """`now` marks the running lesson on today's block (default: the
+    current time); pass it explicitly for tests."""
     st = _Style(use_color() if color is None else color)
+    now = now or datetime.now()
     meta = payload.get("meta") or {}
     window = meta.get("window") or {}
     lines = [st.bold(f"{meta.get('user') or ''}") + st.dim(
@@ -269,7 +355,7 @@ def render_summary(payload: dict[str, Any], color: Optional[bool] = None) -> str
             lines += ["", st.red(f"{name}: {section['error']}")]
             continue
         if name == "timetable":
-            lines += _render_timetable(section, st, window)
+            lines += _render_timetable(section, st, window, now)
         else:
             lines += render(section, st)
 
