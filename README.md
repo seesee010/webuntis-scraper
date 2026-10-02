@@ -1,30 +1,42 @@
 # WebUntis Scraper
 
-Playwright-basierter Scraper für WebUntis. Lädt Stundenplan, Prüfungen /
-Klausuren, Hausaufgaben, Absenzen und Nachrichten und speichert sie als
-strukturiertes JSON.
+🇩🇪 [Deutsche Version](README.de.md)
 
-## Wie es funktioniert
+Playwright-based scraper for WebUntis. Fetches your timetable, exams,
+homework, absences and messages and saves them as structured JSON.
 
-Vor dem JSON-RPC-Endpoint sitzt eine WAF, die Requests ohne echten
-Browser-Kontext blockt. Deshalb läuft **alles** über Playwright:
+## How it works
 
-1. **Login** über das echte Login-Formular (nur nötig, wenn keine gültige
-   Session in `sessions/storage_state.json` liegt).
-2. **Session-Check**: `GET /WebUntis/api/token/new` liefert nur bei
-   eingeloggter Session ein JWT. Daraus kommen `person_id` und Rolle.
-3. **Alle API-Calls** laufen per `page.evaluate(fetch(...))` im Browser:
-   - Stundenplan: REST v1 `/api/rest/view/v1/timetable/entries`
-     (braucht das JWT als Bearer), Fallback JSON-RPC `getTimetable`
-   - Prüfungen: `/api/exams`
-   - Hausaufgaben: `/api/homeworks/lessons`
-   - Abwesenheiten: `/api/classreg/absences/students`
-   - Nachrichten: REST v1 `/api/rest/view/v1/messages`
+The JSON-RPC endpoint sits behind a WAF that blocks requests without a
+real browser context. That's why **everything** runs through Playwright:
 
-`playwright-stealth` patcht typische Bot-Detection-Vektoren
+1. **Login** through the real login form (only needed when there is no
+   valid session in `sessions/storage_state.json`).
+2. **Session check**: `GET /WebUntis/api/token/new` only returns a JWT
+   for a logged-in session. It provides the `person_id` and role.
+3. **All API calls** run in the browser via `page.evaluate(fetch(...))`:
+   - Timetable: REST v1 `/api/rest/view/v1/timetable/entries`
+     (needs the JWT as Bearer token), fallback JSON-RPC `getTimetable`
+   - Exams: `/api/exams`
+   - Homework: `/api/homeworks/lessons`
+   - Absences: `/api/classreg/absences/students`
+   - Messages: REST v1 `/api/rest/view/v1/messages`
+
+`playwright-stealth` patches common bot-detection vectors
 (`navigator.webdriver`, `navigator.plugins`, `navigator.languages`, …).
 
 ## Installation
+
+Linux / macOS:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+```
+
+Windows (PowerShell):
 
 ```powershell
 python -m venv .venv
@@ -33,64 +45,62 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-## Konfiguration
+## Configuration
 
-1. `config.example.json` nach `config.json` kopieren und anpassen:
+1. Copy `config.example.json` to `config.json` and adjust it:
 
-   ```json
+   ```jsonc
    {
-     "server": "nese",          // Subdomain vor .webuntis.com
-     "school": "htbla_kaindorf",// Wert hinter ?school=
+     "server": "nese",           // subdomain before .webuntis.com
+     "school": "htbla_kaindorf", // value after ?school=
      "username": "max.muster"
    }
    ```
 
-   `server` + `school` findest du, indem du auf
-   [webuntis.com](https://webuntis.com) deine Schule suchst - die
-   Redirect-URL enthält beides, z.B.
-   `https://nese.webuntis.com/WebUntis/?school=htbla_kaindorf`.
+   To find `server` and `school`, search for your school on
+   [webuntis.com](https://webuntis.com). The redirect URL contains
+   both, e.g. `https://nese.webuntis.com/WebUntis/?school=htbla_kaindorf`.
 
-2. `.env.example` nach `.env` kopieren und das Passwort eintragen:
+2. Copy `.env.example` to `.env` and enter your password:
 
    ```ini
-   UNTIS_PASSWORD=deinPasswort
+   UNTIS_PASSWORD=yourPassword
    ```
 
-## Nutzung
+## Usage
 
-```powershell
-# Standard-Lauf (headless, gespeicherte Session wird wiederverwendet)
+```bash
+# Default run (headless, reuses the saved session)
 python -m src
 
-# Gespeicherte Session ignorieren und neu einloggen
+# Ignore the saved session and log in again
 python -m src --form-login --no-headless --clear-session
 
-# Anderes Zeitfenster
+# Different time window
 python -m src --days-back 7 --days-forward 30
 
-# Rohdaten der API zusätzlich behalten
+# Also keep the raw API payloads
 python -m src --keep-raw -v
 ```
 
-Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`.
-In `sessions/storage_state.json` werden Cookies gespeichert, damit
-Folge-Läufe kein erneutes Login brauchen.
+Output goes to `out/untis_<timestamp>.json` and `out/latest.json`.
+Cookies are stored in `sessions/storage_state.json`, so later runs
+don't need to log in again.
 
-### Login-Fehler?
+### Login problems?
 
-Falls der Login fehlschlägt (`Form login did not redirect away from the
-login page`), obwohl die Credentials stimmen, prüfe:
+If the login fails (`Form login did not redirect away from the login
+page`) even though your credentials are correct, check:
 
-1. **Server + Slug korrekt?** Auf `webuntis.com` deine Schule suchen -
-   die Redirect-URL lautet `https://<server>.webuntis.com/WebUntis/?school=<slug>`.
-2. **Sonderzeichen im Passwort?** `.env` unterstützt `=` und Quotes,
-   aber führende Whitespaces werden getrimmt. Test mit `python -c "import
-   os; print(repr(os.environ['UNTIS_PASSWORD']))"`.
+1. **Correct server + slug?** Search for your school on `webuntis.com`;
+   the redirect URL is `https://<server>.webuntis.com/WebUntis/?school=<slug>`.
+2. **Special characters in the password?** `.env` supports `=` and
+   quotes, but leading whitespace is trimmed.
 3. **CAPTCHA / SSO / 2FA?** → `python -m src --form-login --no-headless`
-4. **Screenshot:** `logs/login_failed.png` zeigt, was der Browser sah.
-5. **Verbose-Output:** `python -m src -v`.
+4. **Screenshot:** `logs/login_failed.png` shows what the browser saw.
+5. **Verbose output:** `python -m src -v`.
 
-## Output-Schema
+## Output schema
 
 ```jsonc
 {
@@ -108,12 +118,12 @@ login page`), obwohl die Credentials stimmen, prüfe:
           "status": "REGULAR" | "CHANGED" | "CANCELLED" | ...,
           "is_cancelled": false, "is_exam": false, "is_substitution": false,
           "lesson_text": "", "subjects": [{"short":"M","long":"Math"}],
-          "teachers": [{"short":"NEU","long":"...","status":"ADDED","replaces":"ALT"}],
+          "teachers": [{"short":"NEW","long":"...","status":"ADDED","replaces":"OLD"}],
           "classes": [...], "rooms": [...]
         }
       ]}
     ],
-    "lessons": [...]   // bei jsonrpc-Fallback
+    "lessons": [...]   // with the jsonrpc fallback
   },
   "exams": {
     "source": "api" | "timetable_fallback",
@@ -125,28 +135,27 @@ login page`), obwohl die Credentials stimmen, prüfe:
 }
 ```
 
-## Hinweise
+## Notes
 
-- **2FA / Captcha**: Falls deine Schule OTP verlangt, einmalig mit
-  `--no-headless --clear-session` laufen lassen, Code eintippen, dann
-  ab sofort headless.
-- **Prüfungen**: kommen aus `/api/exams`. Falls der Endpoint nicht
-  verfügbar ist, werden Prüfungen aus dem Stundenplan abgeleitet
-  (`source: "timetable_fallback"`).
-- **Rate-Limit**: Wir senden höchstens eine Anfrage alle 300 ms.
-- **Rohdaten**: ohne `--keep-raw` werden alle `raw`-Felder entfernt.
-- **Speicherort**: `sessions/` und `out/` sind in `.gitignore`.
+- **2FA / CAPTCHA**: If your school requires OTP, run once with
+  `--no-headless --clear-session`, enter the code, and run headless
+  from then on.
+- **Exams**: come from `/api/exams`. If that endpoint isn't available,
+  exams are derived from the timetable (`source: "timetable_fallback"`).
+- **Rate limit**: at most one request every 300 ms.
+- **Raw data**: without `--keep-raw`, all `raw` fields are removed.
+- **Storage**: `sessions/` and `out/` are in `.gitignore`.
 
-## Projektstruktur
+## Project structure
 
 ```
 src/
   __init__.py
   main.py           # CLI
-  config.py         # config.json + .env laden
+  config.py         # load config.json + .env
   browser.py        # Playwright + stealth
-  untis_client.py   # Login + Session-Check + API-Calls im Browser
-  normalize.py      # Rohdaten -> saubere Dicts
-  scraper.py        # Orchestrierung
-  exporter.py       # JSON-Ausgabe
+  untis_client.py   # login + session check + in-browser API calls
+  normalize.py      # raw data -> clean dicts
+  scraper.py        # orchestration
+  exporter.py       # JSON output
 ```
