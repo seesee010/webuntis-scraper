@@ -97,6 +97,14 @@ python -m src --form-login --no-headless --clear-session
 # Anderes Zeitfenster
 python -m src --days-back 7 --days-forward 30
 
+# Datums-Kürzel (statt --days-back / --days-forward)
+untis -s --today
+untis -s --tomorrow        # bzw. der nächste Schultag, wenn morgen frei ist
+untis -s --next            # heute, solange Schule ist, sonst der nächste Schultag
+untis -s --week            # diese Woche, Mo–So
+untis -s --next-week
+untis -s --date 12.10.     # auch 12.10.2026 oder 2026-10-12
+
 # Rohdaten der API zusätzlich behalten
 python -m src --keep-raw -v
 
@@ -117,7 +125,13 @@ was mit der Stunde passiert ist:
 | `exam` | Prüfung |
 | `event` | Veranstaltung, z.B. Exkursion (`★ Titel`, mit Lehrern) |
 
-Entfernte Lehrer werden durchgestrichen (`~ALT~` ohne Farben). Darunter folgen
+Entfernte Lehrer werden durchgestrichen (`~ALT~` ohne Farben). Der
+Tageskopf zeigt, wann die Schule an dem Tag wirklich beginnt und endet,
+z.B. `Mon 05.10.  07:50–13:25`.
+
+`--tomorrow` und `--next` schauen in den echten Stundenplan: Wochenenden,
+Ferien und Tage, an denen alles entfällt, werden übersprungen; im
+Tageskopf steht dann `(next school day)`. Darunter folgen
 Prüfungen, offene Hausaufgaben, Abwesenheiten und ungelesene Nachrichten.
 `NO_COLOR=1` schaltet Farben ab.
 

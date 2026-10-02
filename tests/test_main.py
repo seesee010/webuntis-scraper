@@ -62,3 +62,46 @@ def test_no_traceback_logged_without_verbose(monkeypatch, capsys, caplog):
 def test_keyboard_interrupt(monkeypatch, capsys):
     code, _ = _run(monkeypatch, capsys, KeyboardInterrupt())
     assert code == main_mod.EXIT_ABORTED
+
+
+class TestDateShortcuts:
+    def _parse(self, monkeypatch, *argv):
+        monkeypatch.setattr(sys, "argv", ["untis", *argv])
+        return main_mod._parse_args()
+
+    def _cfg(self, monkeypatch, *argv):
+        from datetime import date
+        from src.config import ScraperConfig
+        cfg = ScraperConfig()
+        main_mod._apply_date_shortcuts(cfg, self._parse(monkeypatch, *argv),
+                                       date(2026, 10, 2))
+        return cfg
+
+    def test_today_and_date(self, monkeypatch):
+        from datetime import date
+        cfg = self._cfg(monkeypatch, "--today")
+        assert cfg.start_date == cfg.end_date == date(2026, 10, 2)
+        cfg = self._cfg(monkeypatch, "--date", "2026-09-30")
+        assert cfg.start_date == cfg.end_date == date(2026, 9, 30)
+
+    def test_weeks(self, monkeypatch):
+        from datetime import date
+        cfg = self._cfg(monkeypatch, "--week")
+        assert (cfg.start_date, cfg.end_date) == (date(2026, 9, 28), date(2026, 10, 4))
+        cfg = self._cfg(monkeypatch, "--next-week")
+        assert cfg.start_date == date(2026, 10, 5)
+
+    def test_pick_modes(self, monkeypatch):
+        assert self._cfg(monkeypatch, "--tomorrow").pick_day == "tomorrow"
+        assert self._cfg(monkeypatch, "--next").pick_day == "next"
+        assert self._cfg(monkeypatch).pick_day is None
+
+    @pytest.mark.parametrize("argv", [
+        ("--today", "--tomorrow"),
+        ("--week", "--days-forward", "3"),
+        ("--date", "31.02."),
+    ])
+    def test_invalid_combinations_exit_2(self, monkeypatch, capsys, argv):
+        with pytest.raises(SystemExit) as exc:
+            self._parse(monkeypatch, *argv)
+        assert exc.value.code == 2

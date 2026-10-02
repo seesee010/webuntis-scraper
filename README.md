@@ -110,6 +110,14 @@ python -m src --form-login --no-headless --clear-session
 # Different time window
 python -m src --days-back 7 --days-forward 30
 
+# Date shortcuts (instead of --days-back / --days-forward)
+untis -s --today
+untis -s --tomorrow        # or the next school day if tomorrow is free
+untis -s --next            # today while school runs, else the next school day
+untis -s --week            # this week, Mon–Sun
+untis -s --next-week
+untis -s --date 12.10.     # also 12.10.2026 or 2026-10-12
+
 # Also keep the raw API payloads
 python -m src --keep-raw -v
 
@@ -130,7 +138,13 @@ plus a marker for what happened to the lesson:
 | `exam` | exam lesson |
 | `event` | an event such as an excursion (`★ title`, with its teachers) |
 
-Removed teachers are struck through (`~OLD~` without colors). Below that come upcoming exams, open homework and a line with
+Removed teachers are struck through (`~OLD~` without colors). Each day
+header shows when school actually starts and ends that day, e.g.
+`Mon 05.10.  07:50–13:25`.
+
+`--tomorrow` and `--next` look at the real timetable, so weekends,
+holidays and days where every lesson is cancelled are skipped; the day
+header then says `(next school day)`. Below that come upcoming exams, open homework and a line with
 absences and unread messages. Set `NO_COLOR=1` to disable colors.
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`

@@ -131,11 +131,24 @@ def _label(r: dict) -> str:
     return _STATUS_LABELS.get(r.get("status") or "", "")
 
 
-def _render_timetable(timetable: dict, st: _Style) -> list[str]:
+def _day_header(day_iso: str, rows: list[dict], note: str, st: _Style) -> str:
+    """"Mon 05.10.  07:50–13:25" – span of what actually takes place."""
+    header = st.bold(_fmt_day(day_iso))
+    active = [r for r in rows if not r.get("is_cancelled") and not r.get("is_removed")]
+    if active:
+        header += st.dim(f"  {min(r['start'] for r in active)}–{max(r['end'] for r in active)}")
+    if note:
+        header += "  " + st.yellow(f"({note})")
+    return header
+
+
+def _render_timetable(timetable: dict, st: _Style, window: dict | None = None) -> list[str]:
     days = _rows_from_grid(timetable) if "days" in timetable else _rows_from_lessons(timetable)
     days = {d: rows for d, rows in days.items() if d and rows}
+    window = window or {}
     if not days:
-        return [st.dim("  No lessons in this window.")]
+        note = f" ({window['note']})" if window.get("note") else ""
+        return ["", st.dim(f"  No lessons in this window.{note}")]
 
     # Events don't use the columns, so they don't size them either.
     all_rows = [r for rows in days.values() for r in rows if r["subject"]]
@@ -144,8 +157,9 @@ def _render_timetable(timetable: dict, st: _Style) -> list[str]:
     room_w = max((len(r["rooms"]) for r in all_rows), default=0)
     out: list[str] = []
     for day_iso in sorted(days):
+        note = window.get("note", "") if day_iso == window.get("start") else ""
         out.append("")
-        out.append(st.bold(_fmt_day(day_iso)))
+        out.append(_day_header(day_iso, days[day_iso], note, st))
         prev_slot = None
         for r in sorted(days[day_iso], key=lambda r: (r["start"], r["subject"])):
             slot = (r["start"], r["end"])
@@ -254,7 +268,10 @@ def render_summary(payload: dict[str, Any], color: Optional[bool] = None) -> str
         if "error" in section:
             lines += ["", st.red(f"{name}: {section['error']}")]
             continue
-        lines += render(section, st)
+        if name == "timetable":
+            lines += _render_timetable(section, st, window)
+        else:
+            lines += render(section, st)
 
     counts = _count_line(payload, st)
     if counts:

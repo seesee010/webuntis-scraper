@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +60,10 @@ class ScraperConfig:
     # Date range for timetable scraping
     days_back: int = 0
     days_forward: int = 14
+    # Set by the CLI date shortcuts; override days_back/days_forward.
+    start_date: date | None = None
+    end_date: date | None = None
+    pick_day: str | None = None    # "tomorrow" | "next": first school day
 
     # Modules to enable
     scrape_timetable: bool = True
