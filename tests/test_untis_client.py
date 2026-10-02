@@ -1,7 +1,7 @@
 """Unit tests for the WebUntis client.
 
 These tests don't need a real WebUntis account. They mock the Playwright
-Page and httpx transport to verify the client behaves correctly in the
+Page to verify the client behaves correctly in the
 hard cases: WAF blocks, auth errors, success paths, error mapping.
 """
 from __future__ import annotations
@@ -192,125 +192,139 @@ class TestRpcViaBrowser:
 # ----------------------------------------------------------------------
 # Login flow
 # ----------------------------------------------------------------------
+def _make_loc(count: int = 1) -> MagicMock:
+    loc = MagicMock()
+    loc.count = AsyncMock(return_value=count)
+    loc.wait_for = AsyncMock()
+    loc.fill = AsyncMock()
+    loc.click = AsyncMock()
+    return loc
+
+
+def _form_page(fake_page: MagicMock, user, pw, submit, twofa=None) -> None:
+    """Route the combined selectors used by _do_form_login to fake locators."""
+    def locator_maker(sel):
+        outer = MagicMock()
+        if "otp" in sel:
+            target = twofa or _make_loc(0)
+            outer.count = target.count
+            return outer
+        if "j_username" in sel:
+            target = user
+        elif "j_password" in sel:
+            target = pw
+        elif "submit" in sel:
+            target = submit
+        else:
+            target = _make_loc(0)
+        outer.locator = MagicMock(return_value=MagicMock(first=target))
+        return outer
+    fake_page.locator = MagicMock(side_effect=locator_maker)
+
+
 class TestLogin:
+    async def test_reuses_valid_session(
+        self, cfg: Any, fake_session: MagicMock, fake_page: MagicMock
+    ):
+        c = WebUntisClient(cfg, fake_session)
+        c._probe_session = AsyncMock(return_value=True)
+        c._do_form_login = AsyncMock()
+        fake_session.new_page = AsyncMock(return_value=fake_page)
+
+        await c.login()
+        c._do_form_login.assert_not_awaited()
+        assert c._logged_in is True
+
     async def test_form_login_success(
         self, cfg: Any, fake_session: MagicMock, fake_page: MagicMock
     ):
         """End-to-end: form fields found, filled, submitted, redirected."""
-        from src.browser import BrowserSession
         c = WebUntisClient(cfg, fake_session)
-        c._page = fake_page
-        c._probe_via_browser = AsyncMock(return_value=True)
+        c._probe_session = AsyncMock(return_value=True)
+        fake_session.context.clear_cookies = AsyncMock()
+        fake_session.new_page = AsyncMock(return_value=fake_page)
 
-        # Form fields visible
-        def make_loc(present: bool, **extra):
-            loc = MagicMock()
-            loc.count = AsyncMock(return_value=1 if present else 0)
-            loc.wait_for = AsyncMock()
-            loc.fill = AsyncMock()
-            loc.click = AsyncMock()
-            for k, v in extra.items():
-                setattr(loc, k, v)
-            return loc
-
-        username_loc = make_loc(True)
-        password_loc = make_loc(True)
-        submit_loc = make_loc(True)
-
-        def locator_maker(sel):
-            loc = MagicMock()
-            loc.first = loc
-            if sel in ('input[name="j_username"]', 'input[name="username"]',
-                       'input[name="user"]', 'input[autocomplete="username"]',
-                       'input[type="text"]'):
-                loc.count = AsyncMock(return_value=1)
-                loc.first = username_loc
-            elif sel in ('input[name="j_password"]', 'input[name="password"]',
-                         'input[type="password"]'):
-                loc.count = AsyncMock(return_value=1)
-                loc.first = password_loc
-            elif sel.startswith('button'):
-                loc.count = AsyncMock(return_value=1)
-                loc.first = submit_loc
-            else:
-                loc.count = AsyncMock(return_value=0)
-            return loc
-
-        fake_page.locator = MagicMock(side_effect=locator_maker)
-        fake_page.wait_for_url = AsyncMock()
-        fake_page.goto = AsyncMock()
-        c.session.new_page = AsyncMock(return_value=fake_page)
+        user, pw, submit = _make_loc(), _make_loc(), _make_loc()
+        _form_page(fake_page, user, pw, submit)
 
         await c.login(force=True)
-        username_loc.fill.assert_awaited_once_with("h.gre")
-        password_loc.fill.assert_awaited_once_with("s3cret")
-        submit_loc.click.assert_awaited_once()
+        fake_session.context.clear_cookies.assert_awaited_once()
+        user.fill.assert_awaited_once_with("h.gre")
+        pw.fill.assert_awaited_once_with("s3cret")
+        submit.click.assert_awaited_once()
         assert c._logged_in is True
 
     async def test_no_form_found_screenshots(
         self, cfg: Any, fake_session: MagicMock, fake_page: MagicMock
     ):
-        from src.browser import BrowserSession
-        c = WebUntisClient(cfg, fake_session)
-        c._page = fake_page
-
-        empty = MagicMock()
-        empty.first = empty
-        empty.count = AsyncMock(return_value=0)
         from playwright.async_api import TimeoutError as PWTimeout
-        empty.wait_for = AsyncMock(side_effect=PWTimeout("timeout"))
-        fake_page.locator = MagicMock(return_value=empty)
-        c.session.new_page = AsyncMock(return_value=fake_page)
-        fake_page.goto = AsyncMock()
+        c = WebUntisClient(cfg, fake_session)
+        c._probe_session = AsyncMock(return_value=False)
+        fake_session.new_page = AsyncMock(return_value=fake_page)
+
+        user = _make_loc(0)
+        user.wait_for = AsyncMock(side_effect=PWTimeout("timeout"))
+        _form_page(fake_page, user, _make_loc(0), _make_loc(0))
 
         with pytest.raises(WebUntisError) as exc:
-            await c.login(force=True)
+            await c.login()
         assert "login form" in str(exc.value).lower()
         fake_page.screenshot.assert_awaited()
 
     async def test_2fa_detected(
         self, cfg: Any, fake_session: MagicMock, fake_page: MagicMock
     ):
-        from src.browser import BrowserSession
+        from playwright.async_api import TimeoutError as PWTimeout
+        c = WebUntisClient(cfg, fake_session)
+        c._probe_session = AsyncMock(return_value=False)
+        fake_session.new_page = AsyncMock(return_value=fake_page)
+
+        _form_page(fake_page, _make_loc(), _make_loc(), _make_loc(0),
+                   twofa=_make_loc(1))
+        fake_page.wait_for_url = AsyncMock(side_effect=PWTimeout("timeout"))
+
+        with pytest.raises(WebUntisError) as exc:
+            await c.login()
+        assert "2FA" in str(exc.value)
+        fake_page.keyboard.press.assert_awaited_with("Enter")
+
+
+class TestProbeSession:
+    @staticmethod
+    def _jwt(claims: dict) -> str:
+        import base64
+        body = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip("=")
+        return f"eyJhbGciOiJSUzI1NiJ9.{body}.sig"
+
+    async def test_student_from_token(
+        self, cfg: Any, fake_session: MagicMock, fake_page: MagicMock
+    ):
+        token = self._jwt({"person_id": 4242, "roles": "STUDENT", "username": "x"})
+        async def evaluate(js, payload):
+            if payload["url"].endswith("/token/new"):
+                return {"status": 200, "ok": True, "raw": token, "data": None}
+            assert payload["token"] == token
+            return {"status": 200, "ok": True, "raw": "{}", "data": {
+                "user": {"person": {"id": 4242, "displayName": "Max Muster"},
+                         "students": []},
+            }}
+        fake_page.evaluate = evaluate
         c = WebUntisClient(cfg, fake_session)
         c._page = fake_page
 
-        def make_loc(present: bool):
-            loc = MagicMock()
-            loc.count = AsyncMock(return_value=1 if present else 0)
-            loc.wait_for = AsyncMock()
-            loc.fill = AsyncMock()
-            loc.click = AsyncMock()
-            return loc
+        assert await c._probe_session() is True
+        assert (c._person_id, c._person_type, c._resource_type) == (4242, 5, "STUDENT")
+        assert c.user_display == "Max Muster"
 
-        username_loc = make_loc(True)
-        password_loc = make_loc(True)
-        twofa_loc = make_loc(True)
-
-        def locator_maker(sel):
-            loc = MagicMock()
-            loc.first = loc
-            loc.count = AsyncMock(return_value=0)
-            if 'text' in sel or 'username' in sel or 'user' in sel:
-                loc.count = AsyncMock(return_value=1)
-                loc.first = username_loc
-            elif 'password' in sel:
-                loc.count = AsyncMock(return_value=1)
-                loc.first = password_loc
-            elif 'otp' in sel or 'code' in sel or 'token' in sel:
-                loc.first = twofa_loc
-            return loc
-
-        fake_page.locator = MagicMock(side_effect=locator_maker)
-        fake_page.keyboard.press = AsyncMock()
-        from playwright.async_api import TimeoutError as PWTimeout
-        fake_page.wait_for_url = AsyncMock(side_effect=PWTimeout("timeout"))
-        fake_page.goto = AsyncMock()
-        c.session.new_page = AsyncMock(return_value=fake_page)
-
-        with pytest.raises(WebUntisError) as exc:
-            await c.login(force=True)
-        assert "2FA" in str(exc.value) or "form" in str(exc.value).lower()
+    async def test_not_logged_in(
+        self, cfg: Any, fake_session: MagicMock, fake_page: MagicMock
+    ):
+        fake_page.evaluate = AsyncMock(return_value={
+            "status": 200, "ok": True, "raw": "", "data": None,
+        })
+        c = WebUntisClient(cfg, fake_session)
+        c._page = fake_page
+        assert await c._probe_session() is False
 
 
 # ----------------------------------------------------------------------
@@ -332,45 +346,69 @@ class TestDataFetchers:
         lessons = await client.get_timetable(date(2026, 6, 1), date(2026, 6, 21))
         # 3 weeks (Mon Jun 1 .. Sun Jun 21)
         assert len(calls) == 3
-        assert all(c[0] == "getTimetableForRange" for c in calls)
+        assert all(c[0] == "getTimetable" for c in calls)
+        opts = calls[0][1]["options"]
+        assert opts["element"] == {"id": 12345, "type": 5}
+        assert opts["startDate"] == 20260601
         assert len(lessons) == 3
 
-    async def test_exams_silently_swallows_no_permission(
+    async def test_grid_merges_weeks_with_bearer(
         self, client: WebUntisClient, fake_page: MagicMock,
     ):
+        client._token = "tok"
+        seen = []
         async def evaluate(js, payload):
-            return {
-                "status": 200, "ok": True, "raw": "{}",
-                "data": {"error": {"code": -1, "message": "noperm"}},
-            }
+            seen.append(payload)
+            day = payload["params"]["start"]
+            return {"status": 200, "ok": True, "raw": "{}",
+                    "data": {"days": [{"date": day, "gridEntries": []}]}}
         fake_page.evaluate = evaluate
-        result = await client.get_exams(date(2026, 6, 1), date(2026, 6, 30))
-        assert result == []
 
-    async def test_homework_returns_items(
+        grid = await client.get_timetable_grid(date(2026, 6, 1), date(2026, 6, 14))
+        assert [d["date"] for d in grid["days"]] == ["2026-06-01", "2026-06-08"]
+        assert all(p["token"] == "tok" for p in seen)
+        assert seen[0]["params"]["resources"] == "12345"
+
+    async def test_exams_raises_on_http_error(
         self, client: WebUntisClient, fake_page: MagicMock,
     ):
-        async def evaluate(js, payload):
-            return {
-                "status": 200, "ok": True, "raw": "{}",
-                "data": {"result": [{"id": 1, "text": "do math"}]},
-            }
-        fake_page.evaluate = evaluate
+        fake_page.evaluate = AsyncMock(return_value={
+            "status": 403, "ok": False, "raw": "forbidden", "data": None,
+        })
+        with pytest.raises(WebUntisError):
+            await client.get_exams(date(2026, 6, 1), date(2026, 6, 30))
+
+    async def test_homework_joins_lessons_and_teachers(
+        self, client: WebUntisClient, fake_page: MagicMock,
+    ):
+        fake_page.evaluate = AsyncMock(return_value={
+            "status": 200, "ok": True, "raw": "{}",
+            "data": {"data": {
+                "records": [{"homeworkId": 1, "teacherId": 7, "elementIds": []}],
+                "homeworks": [{"id": 1, "lessonId": 3, "text": "do math",
+                               "date": 20260601, "dueDate": 20260605}],
+                "teachers": [{"id": 7, "name": "GRI"}],
+                "lessons": [{"id": 3, "subject": "M", "lessonType": "Unterricht"}],
+            }},
+        })
         result = await client.get_homework(date(2026, 6, 1), date(2026, 6, 30))
-        assert result == [{"id": 1, "text": "do math"}]
+        assert result[0]["text"] == "do math"
+        assert result[0]["lesson"]["subject"] == "M"
+        assert result[0]["teacher"]["name"] == "GRI"
 
-    async def test_timetable_grid_no_students(
+    async def test_refreshes_token_on_401(
         self, client: WebUntisClient, fake_page: MagicMock,
     ):
-        # /app/data returns no students -> empty grid
-        async def evaluate(js, payload):
-            return {
-                "status": 200, "ok": True, "raw": "{}",
-                "data": {"user": {"students": []}},
-            }
-        fake_page.evaluate = evaluate
-        result = await client.get_timetable_grid(date(2026, 6, 1), date(2026, 6, 30))
-        assert result == {}
+        client._token = "old"
+        new = TestProbeSession._jwt({"person_id": 1})
+        responses = [
+            {"status": 401, "ok": False, "raw": "", "data": None},
+            {"status": 200, "ok": True, "raw": new, "data": None},
+            {"status": 200, "ok": True, "raw": "{}", "data": {"incomingMessages": [{"id": 1}]}},
+        ]
+        fake_page.evaluate = AsyncMock(side_effect=responses)
+        assert await client.get_messages() == [{"id": 1}]
+        assert client._token == new
 
 
 # ----------------------------------------------------------------------

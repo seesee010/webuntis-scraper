@@ -45,6 +45,10 @@ def _parse_args() -> argparse.Namespace:
         help="Run browser with a visible window (useful for first login / 2FA).",
     )
     ap.add_argument(
+        "--form-login", action="store_true",
+        help="Ignore the saved session and always log in through the form.",
+    )
+    ap.add_argument(
         "--clear-session", action="store_true",
         help="Delete the saved storage_state and force a fresh login.",
     )
@@ -81,7 +85,7 @@ async def _async_main(args: argparse.Namespace) -> int:
 
         client = WebUntisClient(cfg, session)
         try:
-            await client.login()
+            await client.login(force=args.form_login)
             scraper = Scraper(cfg, client)
             payload = await scraper.run()
         finally:
