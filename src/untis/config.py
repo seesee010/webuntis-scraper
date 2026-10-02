@@ -99,6 +99,8 @@ class ScraperConfig:
     # Chromium's --no-sandbox etc. Only needed in some Docker/root setups;
     # enabled automatically when running as root.
     browser_no_sandbox: bool = False
+    # CLI arguments applied on every run (read by main.py before parsing).
+    default_args: Any = None
 
     # Browser behaviour
     headless: bool = True

@@ -161,6 +161,22 @@ everything instead (handy on Windows or for development).
    UNTIS_PASSWORD=yourPassword
    ```
 
+3. **Optional: default arguments.** Options you always want can go into `config.json`:
+
+   ```jsonc
+   {
+     "default_args": ["--short"]
+   }
+   ```
+
+   ```bash
+   untis                                  # = untis --short
+   untis --no-short                       # turn the default off for one run
+   UNTIS_DEFAULT_ARGS="-s --today" untis   # same via the environment
+   ```
+
+   Explicit options win: `untis --transport browser` replaces a default `--transport http`, and an explicit date window (`--week`, `--from`, `--days-forward`, …) replaces a default one instead of clashing with it. Flags can be turned off for one run with `--no-short`, `--no-keep-raw`, `--no-calendar-days` or `--no-verbose`. `UNTIS_DEFAULT_ARGS` works the same way and wins over the config; `--config`, `--env`, `--help` and `--version` aren't allowed as defaults. `untis -v` logs the effective arguments.
+
 ## Usage
 
 ```bash

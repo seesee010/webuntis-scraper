@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
+import os
+import shlex
 import sys
 from datetime import date
 from pathlib import Path
@@ -42,26 +45,54 @@ def _setup_logging(verbose: bool, quiet: bool = False) -> None:
             logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def _parse_args(argv: list[str] | None = None, today: date | None = None) -> argparse.Namespace:
-    """`argv`/`today` default to sys.argv / the real date (set in tests)."""
-    today = today or date.today()
-    ap = argparse.ArgumentParser(
+# Options that pick the date window. An explicit one replaces all of them
+# from default_args (instead of clashing with e.g. a default --today).
+WINDOW_DESTS = ("today", "tomorrow", "next", "week", "next_week", "date",
+                "from_", "to", "days_back", "days_forward")
+# These make no sense as defaults (they decide where defaults come from,
+# or print something and exit).
+NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version")
+
+
+class DefaultArgsError(Exception):
+    """Invalid default_args (config.json or UNTIS_DEFAULT_ARGS)."""
+
+
+class _RaisingParser(argparse.ArgumentParser):
+    """Parses default_args: errors are raised instead of printed + exit,
+    so they can be reported together with where the defaults came from."""
+
+    def error(self, message: str):
+        raise DefaultArgsError(message)
+
+
+def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
+    """The CLI parser. With `suppress`, options that weren't given are
+    left out of the namespace, which shows what was given explicitly."""
+    def dflt(value):
+        return {} if suppress else {"default": value}
+
+    ap = cls(
         prog="untis",
         description="Your WebUntis timetable, exams, homework, absences and "
                     "messages in the terminal (plain HTTP, Playwright as a fallback).",
         epilog=f"exit codes: {EXIT_ERROR} unexpected error, {EXIT_CONFIG} config/setup, "
                f"{EXIT_LOGIN} login failed, {EXIT_NETWORK} network/WebUntis error, "
-               f"{EXIT_ABORTED} aborted",
+               f"{EXIT_ABORTED} aborted. Default arguments can be set as "
+               f"\"default_args\" in config.json (e.g. [\"--short\"]) or in "
+               f"UNTIS_DEFAULT_ARGS; explicit options win, flags can be turned "
+               f"off with --no-<flag>.",
+        argument_default=argparse.SUPPRESS if suppress else None,
     )
     ap.add_argument(
         "-V", "--version", action="version", version=f"untis {__version__}",
     )
     ap.add_argument(
-        "--config", default=str(DEFAULT_CONFIG_PATH),
+        "--config", **dflt(str(DEFAULT_CONFIG_PATH)),
         help=f"Path to config.json (default: {DEFAULT_CONFIG_PATH})",
     )
     ap.add_argument(
-        "--env", default=str(DEFAULT_ENV_PATH),
+        "--env", **dflt(str(DEFAULT_ENV_PATH)),
         help=f"Path to .env file (default: {DEFAULT_ENV_PATH})",
     )
     ap.add_argument(
@@ -73,7 +104,7 @@ def _parse_args(argv: list[str] | None = None, today: date | None = None) -> arg
         help="Ignore the saved session and always log in through the form.",
     )
     ap.add_argument(
-        "--transport", choices=TRANSPORTS, default=None,
+        "--transport", choices=TRANSPORTS, **dflt(None),
         help="How to talk to WebUntis: 'auto' (default) uses plain HTTP and "
              "only starts a browser if that fails; 'http'; 'browser'.",
     )
@@ -82,20 +113,20 @@ def _parse_args(argv: list[str] | None = None, today: date | None = None) -> arg
         help="Delete the saved storage_state and force a fresh login.",
     )
     ap.add_argument(
-        "--keep-raw", action="store_true",
+        "--keep-raw", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Include raw API payloads in the output JSON.",
     )
     ap.add_argument(
-        "--days-back", type=_non_negative_int, default=None, metavar="N",
+        "--days-back", type=_non_negative_int, **dflt(None), metavar="N",
         help="Also show the previous N school days (default from config: 0).",
     )
     ap.add_argument(
-        "--days-forward", type=_non_negative_int, default=None, metavar="N",
+        "--days-forward", type=_non_negative_int, **dflt(None), metavar="N",
         help="Show today plus the next N school days (default from config: 14). "
              "Weekends and holidays don't count.",
     )
     ap.add_argument(
-        "--calendar-days", action="store_true",
+        "--calendar-days", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Count --days-back/--days-forward in calendar days instead of school days.",
     )
     dates_group = ap.add_argument_group(
@@ -128,11 +159,70 @@ def _parse_args(argv: list[str] | None = None, today: date | None = None) -> arg
              "--from means next week's. Without --from: from today.",
     )
     ap.add_argument(
-        "-s", "--short", action="store_true",
+        "-s", "--short", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print a compact per-day overview (JSON is still written).",
     )
-    ap.add_argument("-v", "--verbose", action="store_true", help="Debug logging.")
-    args = ap.parse_args(argv)
+    ap.add_argument("-v", "--verbose", action=argparse.BooleanOptionalAction, **dflt(False),
+                    help="Debug logging.")
+    return ap
+
+
+def _load_default_args(argv: list[str]) -> tuple[list[str], str]:
+    """default_args and where they come from: UNTIS_DEFAULT_ARGS wins
+    over "default_args" in the config file (--config is honoured).
+    A string is split shell-style; a list is used as is."""
+    env = os.environ.get("UNTIS_DEFAULT_ARGS")
+    if env is not None:
+        return shlex.split(env), "UNTIS_DEFAULT_ARGS"
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
+    path = Path(pre.parse_known_args(argv)[0].config)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], str(path)            # load_config() reports a broken config
+    raw = data.get("default_args") if isinstance(data, dict) else None
+    if raw is None:
+        return [], str(path)
+    if isinstance(raw, str):
+        return shlex.split(raw), str(path)
+    if isinstance(raw, list) and all(isinstance(x, str) for x in raw):
+        return list(raw), str(path)
+    raise DefaultArgsError(f"\"default_args\" in {path} must be a list of strings or a string")
+
+
+def _parse_args(
+    argv: list[str] | None = None, today: date | None = None,
+    default_args: list[str] | None = None,
+) -> argparse.Namespace:
+    """Parse default_args and the explicit arguments separately, then
+    merge them: explicit options win, and an explicit date window replaces
+    the default one. `argv`/`today`/`default_args` are set in tests."""
+    argv = sys.argv[1:] if argv is None else list(argv)
+    today = today or date.today()
+    ap = _build_parser()
+    source = "default_args"
+    if default_args is None:
+        try:
+            default_args, source = _load_default_args(argv)
+        except DefaultArgsError as exc:
+            ap.error(str(exc))
+    for arg in default_args:
+        if arg.split("=", 1)[0] in NOT_IN_DEFAULTS:
+            ap.error(f"default_args ({source}): {arg} can't be used there")
+    try:
+        merged = vars(_build_parser(_RaisingParser).parse_args(default_args))
+    except DefaultArgsError as exc:
+        ap.error(f"default_args ({source}): {exc}")
+    explicit = vars(_build_parser(suppress=True).parse_args(argv))
+    if set(explicit) & set(WINDOW_DESTS):
+        plain = vars(ap.parse_args([]))
+        for dest in WINDOW_DESTS:
+            merged[dest] = plain[dest]
+    merged.update(explicit)
+    args = argparse.Namespace(**merged)
+    args.default_args, args.defaults_source = default_args, source
+
     shortcut = (args.today or args.tomorrow or args.next or args.week
                 or args.next_week or args.date)
     from_to = args.from_ is not None or args.to is not None
@@ -258,6 +348,12 @@ def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, 
 def main() -> int:
     args = _parse_args()
     _setup_logging(args.verbose, quiet=args.short)
+    if args.default_args:
+        logging.getLogger(__name__).debug(
+            "default_args from %s: %s", args.defaults_source, " ".join(args.default_args))
+    logging.getLogger(__name__).debug(
+        "effective arguments: %s",
+        {k: v for k, v in sorted(vars(args).items()) if v not in (None, False, [])})
     try:
         return asyncio.run(_async_main(args))
     except KeyboardInterrupt:

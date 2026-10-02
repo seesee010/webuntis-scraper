@@ -164,6 +164,22 @@ verwendet (z.B. unter Windows oder zum Entwickeln).
    UNTIS_PASSWORD=deinPasswort
    ```
 
+3. **Optional: Standard-Argumente.** Optionen, die du immer willst, kommen in die `config.json`:
+
+   ```jsonc
+   {
+     "default_args": ["--short"]
+   }
+   ```
+
+   ```bash
+   untis                                  # = untis --short
+   untis --no-short                       # Standard für einen Lauf abschalten
+   UNTIS_DEFAULT_ARGS="-s --today" untis   # dasselbe über die Umgebung
+   ```
+
+   Explizite Optionen gewinnen: `untis --transport browser` ersetzt ein voreingestelltes `--transport http`, und ein explizites Zeitfenster (`--week`, `--from`, `--days-forward`, …) ersetzt das voreingestellte, statt mit ihm zu kollidieren. Schalter lassen sich für einen Lauf mit `--no-short`, `--no-keep-raw`, `--no-calendar-days` oder `--no-verbose` abschalten. `UNTIS_DEFAULT_ARGS` funktioniert genauso und hat Vorrang vor der Config; `--config`, `--env`, `--help` und `--version` sind als Standard nicht erlaubt. `untis -v` zeigt die tatsächlich verwendeten Argumente.
+
 ## Nutzung
 
 ```powershell
