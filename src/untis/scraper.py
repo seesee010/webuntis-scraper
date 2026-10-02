@@ -174,11 +174,13 @@ class Scraper:
             grid = await self.client.get_timetable_grid(start, end)
             if grid.get("days"):
                 own_classes = await self._get_own_classes()
+                grid_units = getattr(self.client, "time_grid", None)
                 return {
                     "source": "rest_v1",
                     "start": start.isoformat(),
                     "end": end.isoformat(),
                     "own_classes": sorted(own_classes),
+                    "time_grid": grid_units if isinstance(grid_units, list) else [],
                     **normalize_timetable_grid(grid, own_classes),
                 }
         except Exception as exc:

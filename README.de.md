@@ -214,6 +214,8 @@ untis --keep-raw -v
 # Kompakte Tagesansicht im Terminal (JSON wird trotzdem geschrieben)
 untis --short                   # oder -s
 untis -s --days-forward 0       # nur heute
+untis --oneline --week          # eine Zeile pro Tag
+untis --table --week            # Wochenraster: Tage als Spalten, Stunden als Zeilen
 ```
 
 `--from` / `--to` verstehen alles, was `--date` versteht, dazu `today`/`heute`, `tomorrow`/`morgen` und Wochentage auf Englisch oder Deutsch (`mon`, `monday`, `mo`, `montag`, …). Ein Wochentag meint den dieser Woche; läge `--to` dadurch vor `--from`, den der nächsten Woche.
@@ -256,6 +258,13 @@ Tageskopf steht dann `(next school day)`.
 
 Unter den Tagen folgen Prüfungen, offene Hausaufgaben, Abwesenheiten und
 ungelesene Nachrichten. Farben gibt es nur im Terminal; `--color always` erzwingt sie (z.B. für `less -R`), `--color never` oder `NO_COLOR=1` schaltet sie ab. `untis --legend` zeigt, was jede Farbe und Markierung bedeutet.
+
+Zwei weitere kompakte Ansichten. `--oneline` zeigt eine Zeile pro Tag, mit einem Eintrag pro Stunde des Zeitrasters der Schule (eine Doppelstunde erscheint zweimal, eine Freistunde als `-`, parallele Gruppen als `NET/PROG`). `--table` zeigt ein Raster mit den Tagen als Spalten und den Stunden als Zeilen, eine Tabelle pro Woche, passend zur Terminalbreite, danach wie bei `-s` Prüfungen und Hausaufgaben. Beide verwenden dieselben Farben; ohne Farben markiert `*` eine Änderung, `~X~` eine entfallene oder ausgetragene Stunde und `!` eine Prüfung.
+
+```
+Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
+Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
+```
 
 Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
 im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In

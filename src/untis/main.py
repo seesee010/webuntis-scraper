@@ -164,6 +164,15 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         help="Print a compact per-day overview (JSON is still written).",
     )
     ap.add_argument(
+        "--oneline", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Print one line per day instead of the day view "
+             "(* changed, ~X~ cancelled/removed, ! exam).",
+    )
+    ap.add_argument(
+        "--table", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Print a week grid (days as columns, periods as rows) instead of the day view.",
+    )
+    ap.add_argument(
         "--color", choices=("auto", "always", "never"), **dflt("auto"),
         help="Colors in the day view: 'auto' (default: only on a terminal, "
              "respects NO_COLOR), 'always' (e.g. for less -R) or 'never'.",
@@ -250,6 +259,8 @@ def _parse_args(
         ap.error("date shortcuts can't be combined with --days-back/--days-forward")
     if from_to and shortcut:
         ap.error("--from/--to can't be combined with other date shortcuts")
+    if args.oneline and args.table:
+        ap.error("--oneline and --table can't be combined")
     args.window = None
     if from_to:
         try:
@@ -257,6 +268,15 @@ def _parse_args(
         except ValueError as exc:
             ap.error(str(exc))
     return args
+
+
+def _layout(args: argparse.Namespace) -> str | None:
+    """Which terminal view to print: "oneline", "table", "days" (-s) or none."""
+    if args.oneline:
+        return "oneline"
+    if args.table:
+        return "table"
+    return "days" if args.short else None
 
 
 def _non_negative_int(text: str) -> int:
@@ -334,10 +354,11 @@ async def _async_main(args: argparse.Namespace) -> int:
         write_latest(payload, cfg.output_dir, keep_raw=cfg.include_raw)
         cache.save(CACHE_PATH, payload, cfg, datetime.now())
     color = resolve_color(args.color)
-    if args.short:
-        print(render_summary(payload, color=color))
+    layout = _layout(args)
+    if layout:
+        print(render_summary(payload, color=color, layout=layout))
     if args.legend:
-        print(("\n" if args.short else "") + render_legend(color))
+        print(("\n" if layout else "") + render_legend(color))
     return 0
 
 
@@ -393,11 +414,11 @@ def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, 
 
 def main() -> int:
     args = _parse_args()
-    if args.legend and not args.short:
+    if args.legend and not _layout(args):
         # Only the legend: no login, no network.
         print(render_legend(resolve_color(args.color)))
         return 0
-    _setup_logging(args.verbose, quiet=args.short)
+    _setup_logging(args.verbose, quiet=bool(_layout(args)))
     if args.default_args:
         logging.getLogger(__name__).debug(
             "default_args from %s: %s", args.defaults_source, " ".join(args.default_args))

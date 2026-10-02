@@ -171,6 +171,19 @@ def _decode_jwt_claims(token: str) -> Optional[dict[str, Any]]:
     return claims if isinstance(claims, dict) else None
 
 
+def _time_grid(app_data: dict[str, Any]) -> list[dict[str, str]]:
+    """The school's periods from /app/data, e.g. [{"start": "07:50",
+    "end": "08:40"}, ...]; [] if missing."""
+    units = (((app_data.get("currentSchoolYear") or {}).get("timeGrid") or {})
+             .get("units") or [])
+    fmt = lambda t: f"{int(t) // 100:02d}:{int(t) % 100:02d}"
+    out = []
+    for u in sorted(units, key=lambda u: u.get("startTime") or 0):
+        if u.get("startTime") is not None and u.get("endTime") is not None:
+            out.append({"start": fmt(u["startTime"]), "end": fmt(u["endTime"])})
+    return out
+
+
 class WebUntisError(RuntimeError):
     """Raised when WebUntis returns an error or auth fails."""
 
@@ -191,6 +204,7 @@ class WebUntisClient:
         self._resource_type: Optional[str] = None
         self._user_display: Optional[str] = None
         self._token: Optional[str] = None
+        self.time_grid: list[dict[str, str]] = []
         self._logged_in = False
         self._rpc_id = 0
         self._last_request_ts = 0.0
@@ -421,6 +435,7 @@ class WebUntisClient:
         self._person_id = int(person_id)
         self._person_type, self._resource_type = ELEMENT_TYPES[kind]
         self._user_display = person.get("displayName") or claims.get("username")
+        self.time_grid = _time_grid(app_data)
         log.debug(
             "Session belongs to %s (person_id=%s, type=%s)",
             self._user_display, self._person_id, kind,

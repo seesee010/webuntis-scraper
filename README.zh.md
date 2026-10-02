@@ -207,6 +207,8 @@ untis --keep-raw -v
 # 在终端里显示简洁的每日视图（仍然会写入 JSON）
 untis --short                   # 或 -s
 untis -s --days-forward 0       # 只看今天
+untis --oneline --week          # 每天一行
+untis --table --week            # 周课表：日期为列，课时为行
 ```
 
 `--from` / `--to` 支持 `--date` 的所有格式，另外还支持 `today`、`tomorrow` 以及英文或德文的星期名称（`mon`、`monday`、`mo`、`montag` 等）。星期名称指本周的那一天；如果这样 `--to` 会早于 `--from`，则指下周的那一天。
@@ -244,6 +246,13 @@ untis -s --days-forward 0       # 只看今天
 
 在每天的课表下面，会显示即将到来的考试、未完成的作业，以及一行缺勤和未读消息的统计。设置
 只有在终端中才会显示颜色；`--color always` 强制显示颜色（例如用于 `less -R`），`--color never` 或 `NO_COLOR=1` 会关闭颜色。`untis --legend` 会显示每种颜色和标记的含义。
+
+另外还有两种紧凑的显示方式。`--oneline` 每天显示一行，按学校的课时表每节课一个条目（连堂课出现两次，空闲课时显示为 `-`，并行的小组显示为 `NET/PROG`）。`--table` 显示一个表格，日期为列、课时为行，每周一个表格，宽度适应终端，后面和 `-s` 一样显示考试和作业。两种方式使用相同的颜色；没有颜色时，`*` 表示有变化，`~X~` 表示课程取消或被移出，`!` 表示考试。
+
+```
+Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
+Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
+```
 
 输出保存在数据目录（`~/.local/share/untis/` 或项目文件夹）中的 `out/untis_<timestamp>.json` 和
 `out/latest.json`。Cookie 保存在那里的 `sessions/storage_state.json` 中，这样以后运行时不需要
