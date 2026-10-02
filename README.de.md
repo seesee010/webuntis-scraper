@@ -1,5 +1,7 @@
 # WebUntis Scraper
 
+🇬🇧 [English](README.md) · 🇩🇪 [Deutsch](README.de.md) · 🇫🇷 [Français](README.fr.md) · 🇨🇳 [中文](README.zh.md)
+
 Playwright-basierter Scraper für WebUntis. Lädt Stundenplan, Prüfungen /
 Klausuren, Hausaufgaben, Absenzen und Nachrichten und speichert sie als
 strukturiertes JSON.
@@ -131,9 +133,10 @@ z.B. `Mon 05.10.  07:50–13:25`.
 
 `--tomorrow` und `--next` schauen in den echten Stundenplan: Wochenenden,
 Ferien und Tage, an denen alles entfällt, werden übersprungen; im
-Tageskopf steht dann `(next school day)`. Darunter folgen
-Prüfungen, offene Hausaufgaben, Abwesenheiten und ungelesene Nachrichten.
-`NO_COLOR=1` schaltet Farben ab.
+Tageskopf steht dann `(next school day)`.
+
+Unter den Tagen folgen Prüfungen, offene Hausaufgaben, Abwesenheiten und
+ungelesene Nachrichten. `NO_COLOR=1` schaltet Farben ab.
 
 Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
 im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In

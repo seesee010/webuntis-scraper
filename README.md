@@ -2,7 +2,7 @@
 
 ![Made With:vibecoding](https://img.shields.io/badge/made%20with-vibecoding-blueviolet?style=plastic)
 
-🇩🇪 [Deutsche Version](README.de.md)
+🇬🇧 [English](README.md) · 🇩🇪 [Deutsch](README.de.md) · 🇫🇷 [Français](README.fr.md) · 🇨🇳 [中文](README.zh.md)
 
 Playwright-based scraper for WebUntis. Fetches your timetable, exams,
 homework, absences and messages and saves them as structured JSON.
@@ -144,7 +144,9 @@ header shows when school actually starts and ends that day, e.g.
 
 `--tomorrow` and `--next` look at the real timetable, so weekends,
 holidays and days where every lesson is cancelled are skipped; the day
-header then says `(next school day)`. Below that come upcoming exams, open homework and a line with
+header then says `(next school day)`.
+
+Below the days come upcoming exams, open homework and a line with
 absences and unread messages. Set `NO_COLOR=1` to disable colors.
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
