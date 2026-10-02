@@ -70,7 +70,17 @@ python -m src --days-back 7 --days-forward 30
 
 # Rohdaten der API zusätzlich behalten
 python -m src --keep-raw -v
+
+# Kompakte Tagesansicht im Terminal (JSON wird trotzdem geschrieben)
+python -m src --short                   # oder -s
+python -m src -s --days-forward 0       # nur heute
 ```
+
+`--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum, markiert
+`changed` / `cancelled` / `exam`, Supplierungen als `NEU (for ALT)` und
+entfernte Lehrer durchgestrichen (`~ALT~` ohne Farben). Darunter folgen
+Prüfungen, offene Hausaufgaben, Abwesenheiten und ungelesene Nachrichten.
+`NO_COLOR=1` schaltet Farben ab.
 
 Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`.
 In `sessions/storage_state.json` werden Cookies gespeichert, damit
@@ -149,4 +159,5 @@ src/
   normalize.py      # Rohdaten -> saubere Dicts
   scraper.py        # Orchestrierung
   exporter.py       # JSON-Ausgabe
+  summary.py        # --short Tagesansicht
 ```

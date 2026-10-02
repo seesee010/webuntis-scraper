@@ -81,7 +81,17 @@ python -m src --days-back 7 --days-forward 30
 
 # Also keep the raw API payloads
 python -m src --keep-raw -v
+
+# Compact day view in the terminal (JSON is still written)
+python -m src --short                   # or -s
+python -m src -s --days-forward 0       # today only
 ```
+
+`--short` prints one block per school day: time, subject, teacher, room,
+plus `changed` / `cancelled` / `exam` markers. Substitutes show as
+`NEW (for OLD)`, removed teachers are struck through (`~OLD~` without
+colors). Below that come upcoming exams, open homework and a line with
+absences and unread messages. Set `NO_COLOR=1` to disable colors.
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`.
 Cookies are stored in `sessions/storage_state.json`, so later runs
@@ -158,4 +168,5 @@ src/
   normalize.py      # raw data -> clean dicts
   scraper.py        # orchestration
   exporter.py       # JSON output
+  summary.py        # --short day view
 ```

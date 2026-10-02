@@ -11,11 +11,12 @@ from .browser import BrowserSession
 from .config import load_config
 from .exporter import write_json, write_latest
 from .scraper import Scraper
+from .summary import render_summary
 from .untis_client import WebUntisClient
 
 
-def _setup_logging(verbose: bool) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
+def _setup_logging(verbose: bool, quiet: bool = False) -> None:
+    level = logging.DEBUG if verbose else (logging.WARNING if quiet else logging.INFO)
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)-7s] %(name)s: %(message)s",
@@ -64,6 +65,10 @@ def _parse_args() -> argparse.Namespace:
         "--days-forward", type=int, default=None,
         help="Override config: how many days in the future to scrape.",
     )
+    ap.add_argument(
+        "-s", "--short", action="store_true",
+        help="Print a compact per-day overview (JSON is still written).",
+    )
     ap.add_argument("-v", "--verbose", action="store_true", help="Debug logging.")
     return ap.parse_args()
 
@@ -102,12 +107,14 @@ async def _async_main(args: argparse.Namespace) -> int:
         cfg.output_dir,
         keep_raw=cfg.include_raw,
     )
+    if args.short:
+        print(render_summary(payload))
     return 0
 
 
 def main() -> int:
     args = _parse_args()
-    _setup_logging(args.verbose)
+    _setup_logging(args.verbose, quiet=args.short)
     try:
         return asyncio.run(_async_main(args))
     except KeyboardInterrupt:

@@ -182,6 +182,7 @@ def normalize_timetable_grid(grid: dict) -> dict[str, Any]:
                 "type": entry.get("type") or "",
                 "lesson_text": entry.get("lessonText") or "",
                 "substitution_text": entry.get("substitutionText") or "",
+                "info": entry.get("lessonInfo") or "",   # e.g. event title
                 "notes": entry.get("notesAll") or "",
                 **_collect_elements(entry),
                 "raw": entry,
