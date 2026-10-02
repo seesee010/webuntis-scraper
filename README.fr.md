@@ -229,6 +229,8 @@ untis -H --days-forward 5        # devoirs à rendre dans les 5 prochains jours 
 untis -t -H                      # les deux sections
 untis --now                      # le cours actuel et le suivant
 untis --now --format waybar      # JSON pour un module personnalisé Waybar
+untis --changes                  # ce qui a changé depuis la dernière exécution de --changes
+untis --changes --notify         # … et en notifications de bureau
 ```
 
 `--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
@@ -296,6 +298,14 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 }
 ```
 
+`--changes` compare l'emploi du temps, les examens et les devoirs avec l'état de l'exécution précédente de `--changes` (gardé en privé dans `~/.local/share/untis/state/`) et n'affiche que les changements : annulations, remplacements, changements de salle, cours dont ta classe a été retirée ou qui ont disparu, examens ajoutés ou supprimés, nouveaux devoirs. Seuls les jours présents dans les deux périodes sont comparés. La première exécution enregistre seulement l'état. Le code de sortie `10` signifie qu'il y a eu un changement, `0` aucun. `--notify` envoie aussi chaque changement en notification de bureau (`notify-send` sous Linux, `osascript` sous macOS). `contrib/systemd/` contient un minuteur utilisateur qui le fait toutes les 15 minutes les jours de cours :
+
+```bash
+cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now untis-changes.timer
+```
+
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y
 sont enregistrés dans `sessions/storage_state.json`, pour que les exécutions suivantes
@@ -328,6 +338,7 @@ ajoute `-v` pour voir la trace complète.
 | `3` | échec de la connexion |
 | `4` | WebUntis injoignable ou a renvoyé une erreur |
 | `5` | `--start` / `--end` / `--free` : pas de cours ce jour-là (affiche `-`) |
+| `10` | `--changes` : quelque chose a changé depuis la dernière exécution |
 | `130` | interrompu avec Ctrl-C |
 
 ## Format de sortie
@@ -373,7 +384,7 @@ ajoute `-v` pour voir la trace complète.
 
 - **Mot de passe :** `~/.config/untis/.env`. Rends-le lisible uniquement par toi (`chmod 600`). `untis` avertit si d'autres utilisateurs peuvent le lire.
 - **Session de connexion :** avec les cookies de `~/.local/share/untis/sessions/storage_state.json`, toute personne qui possède le fichier peut agir en ton nom jusqu'à l'expiration de la session. Le fichier est créé avec le mode `600` dans un dossier `700`.
-- **Sorties et fichiers de débogage :** `out/` et `cache/` (ton nom, emploi du temps, absences) et `logs/` (captures de la page WebUntis) sont aussi privés, et les fichiers des anciennes versions sont corrigés à la prochaine exécution. Vérifie les captures avant de les partager.
+- **Sorties et fichiers de débogage :** `out/`, `cache/`, `state/` (ton nom, emploi du temps, absences) et `logs/` (captures de la page WebUntis) sont aussi privés, et les fichiers des anciennes versions sont corrigés à la prochaine exécution. Vérifie les captures avant de les partager.
 - **Sandbox du navigateur :** Chromium tourne avec sa sandbox activée. Seulement dans Docker ou des environnements similaires qui en ont besoin, mets `"browser_no_sandbox": true` dans `config.json` (activé automatiquement en tant que root).
 
 ```bash
@@ -398,6 +409,7 @@ rm ~/.local/share/untis/sessions/storage_state.json       # pareil, à la main
 
 ```
 pyproject.toml      # métadonnées du paquet, dépendances, commande `untis`
+contrib/systemd/    # minuteur utilisateur pour --changes --notify
 bin/
   untis             # lanceur pour une copie du dépôt
 src/untis/

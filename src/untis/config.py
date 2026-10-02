@@ -58,6 +58,8 @@ OUT_DIR = DATA_DIR / "out"
 LOGS_DIR = DATA_DIR / "logs"
 CACHE_DIR = DATA_DIR / "cache"            # last fetched payload (--offline/--max-age)
 CACHE_PATH = CACHE_DIR / "last.json"
+STATE_DIR = DATA_DIR / "state"            # --changes snapshot
+CHANGES_PATH = STATE_DIR / "changes.json"
 
 
 TRANSPORTS = ("auto", "http", "browser")
@@ -176,7 +178,7 @@ def _secure_data_dirs(cfg: ScraperConfig, env_path: Path) -> None:
     """Sessions, output and logs hold personal data: owner-only dirs
     (700) and files (600). Only our own sub-directories are touched, never
     the project folder itself or a custom output_dir chosen by the user."""
-    for d in (SESSIONS_DIR, LOGS_DIR, CACHE_DIR):
+    for d in (SESSIONS_DIR, LOGS_DIR, CACHE_DIR, STATE_DIR):
         ensure_private_dir(d)
         tighten_dir(d)
     out = Path(cfg.output_dir)

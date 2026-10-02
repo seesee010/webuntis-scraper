@@ -227,6 +227,8 @@ untis -H --days-forward 5        # Hausaufgaben, die in den nächsten 5 Schultag
 untis -t -H                      # beide Abschnitte
 untis --now                      # die aktuelle und die nächste Stunde
 untis --now --format waybar      # JSON für ein Waybar-Custom-Modul
+untis --changes                  # was sich seit dem letzten --changes-Lauf geändert hat
+untis --changes --notify         # … und als Desktop-Benachrichtigungen
 ```
 
 `--from` / `--to` verstehen alles, was `--date` versteht, dazu `today`/`heute`, `tomorrow`/`morgen` und Wochentage auf Englisch oder Deutsch (`mon`, `monday`, `mo`, `montag`, …). Ein Wochentag meint den dieser Woche; läge `--to` dadurch vor `--from`, den der nächsten Woche.
@@ -294,6 +296,14 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 }
 ```
 
+`--changes` vergleicht Stundenplan, Prüfungen und Hausaufgaben mit dem Stand des vorherigen `--changes`-Laufs (privat gespeichert in `~/.local/share/untis/state/`) und gibt nur Änderungen aus: Entfälle, Supplierungen, Raumwechsel, Stunden, aus denen deine Klasse ausgetragen wurde oder die verschwunden sind, neue oder entfernte Prüfungen, neue Hausaufgaben. Verglichen werden nur Tage, die in beiden Zeiträumen liegen. Der erste Lauf speichert nur den Stand. Exit-Code `10` heißt, es hat sich etwas geändert, `0` nichts. `--notify` schickt jede Änderung zusätzlich als Desktop-Benachrichtigung (`notify-send` unter Linux, `osascript` unter macOS). In `contrib/systemd/` liegt ein Benutzer-Timer, der das an Schultagen alle 15 Minuten macht:
+
+```bash
+cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now untis-changes.timer
+```
+
 Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
 im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In
 `sessions/storage_state.json` werden dort Cookies gespeichert, damit
@@ -326,6 +336,7 @@ mit `-v` gibt es den vollen Traceback.
 | `3` | Login fehlgeschlagen |
 | `4` | WebUntis nicht erreichbar oder Fehler vom Server |
 | `5` | `--start` / `--end` / `--free`: an dem Tag keine Schule (gibt `-` aus) |
+| `10` | `--changes`: seit dem letzten Lauf hat sich etwas geändert |
 | `130` | mit Strg-C abgebrochen |
 
 ## Output-Schema
@@ -371,7 +382,7 @@ mit `-v` gibt es den vollen Traceback.
 
 - **Passwort:** `~/.config/untis/.env`. Nur für dich lesbar machen (`chmod 600`). `untis` warnt, wenn andere Nutzer die Datei lesen können.
 - **Login-Session:** Mit den Cookies in `~/.local/share/untis/sessions/storage_state.json` kann jeder, der die Datei hat, bis zum Ablauf der Session als du auftreten. Die Datei wird mit Rechten `600` in einem `700`-Ordner angelegt.
-- **Output und Debug-Dateien:** `out/` und `cache/` (dein Name, Stundenplan, Abwesenheiten) und `logs/` (Screenshots der WebUntis-Seite) sind ebenfalls privat, Dateien älterer Versionen werden beim nächsten Lauf korrigiert. Screenshots vor dem Teilen prüfen.
+- **Output und Debug-Dateien:** `out/`, `cache/`, `state/` (dein Name, Stundenplan, Abwesenheiten) und `logs/` (Screenshots der WebUntis-Seite) sind ebenfalls privat, Dateien älterer Versionen werden beim nächsten Lauf korrigiert. Screenshots vor dem Teilen prüfen.
 - **Browser-Sandbox:** Chromium läuft mit eingeschalteter Sandbox. Nur in Docker oder ähnlichen Umgebungen, die es brauchen, `"browser_no_sandbox": true` in `config.json` setzen (als root wird es automatisch aktiviert).
 
 ```bash
@@ -396,6 +407,7 @@ rm ~/.local/share/untis/sessions/storage_state.json       # dasselbe von Hand
 
 ```
 pyproject.toml      # Paket-Metadaten, Abhängigkeiten, `untis`-Befehl
+contrib/systemd/    # Benutzer-Timer für --changes --notify
 bin/
   untis             # Launcher für einen Dev-Checkout
 src/untis/

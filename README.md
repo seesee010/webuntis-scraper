@@ -224,6 +224,8 @@ untis -H --days-forward 5        # homework due in the next 5 school days
 untis -t -H                      # both sections
 untis --now                      # the current and the next lesson
 untis --now --format waybar      # JSON for a Waybar custom module
+untis --changes                  # what changed since the last --changes run
+untis --changes --notify         # … and as desktop notifications
 ```
 
 `--from` / `--to` accept everything `--date` does, plus `today`, `tomorrow` and weekday names in English or German (`mon`, `monday`, `mo`, `montag`, …). A weekday means this week's; if `--to` would end up before `--from`, it means next week's.
@@ -291,6 +293,14 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 }
 ```
 
+`--changes` compares the timetable, exams and homework with the snapshot of the previous `--changes` run (kept privately in `~/.local/share/untis/state/`) and prints only what changed: cancellations, substitutions, room changes, lessons your class was removed from or that disappeared, new or removed exams, new homework. Only days in both windows are compared. The first run just saves the snapshot. Exit code `10` means something changed, `0` nothing. `--notify` also sends each change as a desktop notification (`notify-send` on Linux, `osascript` on macOS). `contrib/systemd/` has a user timer that does this every 15 minutes on school days:
+
+```bash
+cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now untis-changes.timer
+```
+
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
 inside the data directory (`~/.local/share/untis/`, or the project
 folder). Cookies are stored in `sessions/storage_state.json` there, so
@@ -323,6 +333,7 @@ add `-v` for the full traceback.
 | `3` | login failed |
 | `4` | WebUntis unreachable or returned an error |
 | `5` | `--start` / `--end` / `--free`: no school that day (prints `-`) |
+| `10` | `--changes`: something changed since the last run |
 | `130` | aborted with Ctrl-C |
 
 ## Output schema
@@ -368,7 +379,7 @@ add `-v` for the full traceback.
 
 - **Password:** `~/.config/untis/.env`. Make it readable only by you (`chmod 600`). `untis` warns if other users can read it.
 - **Login session:** the cookies in `~/.local/share/untis/sessions/storage_state.json` let anyone with the file act as you until the session expires. The file is created with mode `600` in a `700` directory.
-- **Output and debug files:** `out/` and `cache/` (your name, timetable, absences) and `logs/` (screenshots of the WebUntis page) are private as well, and files from older versions are fixed on the next run. Check screenshots before sharing them.
+- **Output and debug files:** `out/`, `cache/`, `state/` (your name, timetable, absences) and `logs/` (screenshots of the WebUntis page) are private as well, and files from older versions are fixed on the next run. Check screenshots before sharing them.
 - **Browser sandbox:** Chromium runs with its sandbox enabled. Only in Docker or similar setups that need it, set `"browser_no_sandbox": true` in `config.json` (it is enabled automatically when running as root).
 
 ```bash
@@ -393,6 +404,7 @@ rm ~/.local/share/untis/sessions/storage_state.json       # the same, by hand
 
 ```
 pyproject.toml      # package metadata, dependencies, `untis` command
+contrib/systemd/    # user timer for --changes --notify
 bin/
   untis             # launcher for a dev checkout
 src/untis/
