@@ -576,3 +576,66 @@ def render_legend(color: Optional[bool] = None) -> str:
     lines.append(f"  {'now':<11} " + st.bold(st.yellow("▶")) + " the running lesson, "
                  + st.dim("dimmed") + " = already over")
     return "\n".join(lines)
+
+
+# --- --tests (#3) ------------------------------------------------------------
+def _relative_day(day: date, today: date) -> str:
+    """"today", "tomorrow", "in 17 days", "yesterday", "3 days ago"."""
+    diff = (day - today).days
+    if diff == 0:
+        return "today"
+    if diff == 1:
+        return "tomorrow"
+    if diff == -1:
+        return "yesterday"
+    return f"in {diff} days" if diff > 0 else f"{-diff} days ago"
+
+
+def render_tests(
+    payload: dict[str, Any], color: Optional[bool] = None, today: Optional[date] = None,
+    now: Optional[datetime] = None,
+) -> str:
+    """Only the exams/tests of the window, sorted by date (--tests)."""
+    st = _Style(use_color() if color is None else color)
+    today = today or date.today()
+    section = payload.get("exams") or {}
+    if "error" in section:
+        return st.red(f"exams: {section['error']}")
+    window = (payload.get("meta") or {}).get("window") or {}
+    start = date.fromisoformat(window.get("start") or today.isoformat())
+    end = date.fromisoformat(window.get("end") or today.isoformat())
+    items = sorted((e for e in section.get("exams") or [] if e.get("date")),
+                   key=lambda e: (e["date"], e.get("start_time") or ""))
+    n = len(items)
+    noun = "test" if n == 1 else "tests"
+    if start >= today:
+        title = f"Upcoming tests · {n} {noun} in the next {(end - today).days} days"
+    else:
+        title = f"Tests · {n} {noun} from {start:%d.%m.%Y} to {end:%d.%m.%Y}"
+    meta = payload.get("meta") or {}
+    header = st.bold(title)
+    if meta.get("cached_at"):
+        header += "  " + st.yellow(f"({_cache_age(meta['cached_at'], now or datetime.now())})")
+    lines = [header]
+    if not items:
+        return "\n".join(lines + ["", st.dim("No tests in this window.")])
+
+    def cells(e):
+        when = _fmt_day(e["date"])
+        if e.get("start_time"):
+            when += f" {e['start_time']}" + (f"–{e['end_time']}" if e.get("end_time") else "")
+        return [when, _shorts(e.get("subjects") or []), e.get("name") or e.get("type") or "",
+                _shorts(e.get("teachers") or []), _shorts(e.get("rooms") or [])]
+    rows = [cells(e) for e in items]
+    widths = [max(len(r[i]) for r in rows) for i in range(5)]
+    lines.append("")
+    for e, r in zip(items, rows):
+        day = date.fromisoformat(e["date"])
+        when, subj, name, teach, room = (r[i].ljust(widths[i]) for i in range(5))
+        # Keep the room's padding (even when empty) so "in N days" lines up.
+        line = (f"{when}  {st.role('exam', subj)}  {name}  {teach}  {st.cyan(room)}  "
+                + _relative_day(day, today))
+        if e.get("grade"):
+            line += "  " + st.bold(f"grade: {e['grade']}")
+        lines.append(st.dim(_plain(line)) if day < today else line)
+    return "\n".join(lines)

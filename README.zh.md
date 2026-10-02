@@ -213,6 +213,8 @@ untis --start tomorrow           # 明天第一节真正上的课，例如 07:50
 untis --end                      # 今天什么时候放学
 untis --free next                # 下一个上课日的空闲课时
 untis --start tomorrow || echo "sleep in"   # 退出码 5 = 那天没有课
+untis --tests                    # 到学年结束前所有即将到来的考试
+untis -t --days-back 30 --days-forward 0   # 最近 30 个上课日的考试（含成绩）
 ```
 
 `--from` / `--to` 支持 `--date` 的所有格式，另外还支持 `today`、`tomorrow` 以及英文或德文的星期名称（`mon`、`monday`、`mo`、`montag` 等）。星期名称指本周的那一天；如果这样 `--to` 会早于 `--from`，则指下周的那一天。
@@ -259,6 +261,8 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 ```
 
 `--start`、`--end` 和 `--free` 回答关于某一天的一个问题，只输出答案：`today`（默认）、`tomorrow`、`next`（下一个上课日）、日期或星期名称（下一个该星期日）。取消的课和你的班级被移出的课不计算在内，所以第一节课取消时 `--start` 会往后推。空闲课时来自学校的课时表。如果那天没有课，会输出 `-` 并以代码 5 退出。`--format json` 会输出 `{"date", "start", "end", "first", "free"}`。只会获取课表，不会写入 JSON 文件。
+
+`--tests`（也可以用 `-t` / `--exams`）只显示考试和测验，按日期排序并显示 “in N days”，如果 WebUntis 提供成绩则显示成绩，已经过去的考试会变暗。不指定时间范围时，范围是从今天到学年结束（配置中的 `days_forward` 在这里不适用）；使用 `--days-forward`、`--from`、`--week` 等时只显示该范围。只会获取考试数据。
 
 输出保存在数据目录（`~/.local/share/untis/` 或项目文件夹）中的 `out/untis_<timestamp>.json` 和
 `out/latest.json`。Cookie 保存在那里的 `sessions/storage_state.json` 中，这样以后运行时不需要

@@ -184,6 +184,15 @@ def _time_grid(app_data: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
+def _school_year_end(app_data: dict[str, Any]) -> Optional[date]:
+    """Last day of the current school year from /app/data, if present."""
+    end = (((app_data.get("currentSchoolYear") or {}).get("dateRange") or {}).get("end"))
+    try:
+        return date.fromisoformat(end) if end else None
+    except ValueError:
+        return None
+
+
 class WebUntisError(RuntimeError):
     """Raised when WebUntis returns an error or auth fails."""
 
@@ -205,6 +214,7 @@ class WebUntisClient:
         self._user_display: Optional[str] = None
         self._token: Optional[str] = None
         self.time_grid: list[dict[str, str]] = []
+        self.school_year_end: Optional[date] = None
         self._logged_in = False
         self._rpc_id = 0
         self._last_request_ts = 0.0
@@ -436,6 +446,7 @@ class WebUntisClient:
         self._person_type, self._resource_type = ELEMENT_TYPES[kind]
         self._user_display = person.get("displayName") or claims.get("username")
         self.time_grid = _time_grid(app_data)
+        self.school_year_end = _school_year_end(app_data)
         log.debug(
             "Session belongs to %s (person_id=%s, type=%s)",
             self._user_display, self._person_id, kind,
