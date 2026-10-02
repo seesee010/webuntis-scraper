@@ -13,11 +13,12 @@ from pathlib import Path
 
 import httpx
 
-from . import __version__, cache, dayinfo
+from . import __version__, cache, changes, dayinfo
 from . import now as now_mod
 from .browser import BrowserSession
 from .config import (
     CACHE_PATH,
+    CHANGES_PATH,
     DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, ConfigError, load_config,
 )
 from .dates import parse_date, parse_day_spec, resolve_from_to, week_range
@@ -34,6 +35,7 @@ EXIT_CONFIG = 2     # missing/invalid config or setup (e.g. no Chromium)
 EXIT_LOGIN = 3      # could not log in
 EXIT_NETWORK = 4    # WebUntis unreachable or returned an error
 EXIT_NO_SCHOOL = 5  # --start/--end/--free: no lessons that day
+EXIT_CHANGES = 10   # --changes: something changed since the last run
 EXIT_ABORTED = 130  # Ctrl-C
 
 
@@ -85,6 +87,7 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         epilog=f"exit codes: {EXIT_ERROR} unexpected error, {EXIT_CONFIG} config/setup, "
                f"{EXIT_LOGIN} login failed, {EXIT_NETWORK} network/WebUntis error, "
                f"{EXIT_NO_SCHOOL} no school that day (--start/--end/--free), "
+               f"{EXIT_CHANGES} changes found (--changes), "
                f"{EXIT_ABORTED} aborted. Default arguments can be set as "
                f"\"default_args\" in config.json (e.g. [\"--short\"]) or in "
                f"UNTIS_DEFAULT_ARGS; explicit options win, flags can be turned "
@@ -190,6 +193,15 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         "--now", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Show the current and the next lesson (the next school day's first "
              "lesson after school). Use --max-age for status bars.",
+    )
+    ap.add_argument(
+        "--changes", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Only print what changed since the last --changes run (cancellations, "
+             "substitutions, room changes, new exams/homework); exit code 10 if anything did.",
+    )
+    ap.add_argument(
+        "--notify", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="With --changes: also send each change as a desktop notification.",
     )
     ap.add_argument(
         "--idle-empty", action=argparse.BooleanOptionalAction, **dflt(False),
@@ -319,6 +331,12 @@ def _parse_args(
                  "--homework, --oneline or --table")
     if args.format == "waybar" and not args.now:
         ap.error("--format waybar only works with --now")
+    if args.changes and (args.query or args.now or args.tests or args.homework
+                         or args.oneline or args.table):
+        ap.error("--changes can't be combined with questions, --now, --tests, "
+                 "--homework, --oneline or --table")
+    if args.notify and not args.changes:
+        ap.error("--notify only works with --changes")
     args.window = None
     if from_to:
         try:
@@ -415,6 +433,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         return await _answer_question(cfg, args, today, now)
     if args.now:
         return await _answer_now(cfg, args, today, now)
+    if args.changes:
+        return await _answer_changes(cfg, args, today, now)
     if args.tests or args.homework:
         _only_sections(cfg, args)
 
@@ -513,6 +533,30 @@ async def _answer_now(cfg, args: argparse.Namespace, today: date, now: datetime)
     return 0
 
 
+async def _answer_changes(cfg, args: argparse.Namespace, today: date, now: datetime) -> int:
+    """--changes: compare with the snapshot of the last --changes run."""
+    cfg.scrape_absences = cfg.scrape_messages = False
+    payload, _ = await _get_payload(cfg, args, today, now)
+    timetable = payload.get("timetable") or {}
+    if "error" in timetable:
+        raise WebUntisError(f"timetable: {timetable['error']}")
+    new = changes.snapshot(payload, cache.account_key(cfg), datetime.now())
+    old = changes.load(CHANGES_PATH)
+    changes.save(CHANGES_PATH, new)
+    if old is None or old.get("account") != new["account"]:
+        print("No earlier snapshot yet; saved the current state for the next --changes run.")
+        return 0
+    found = changes.diff(old, new)
+    if not found:
+        print(f"No changes since {old['saved_at'].replace('T', ' ')[:16]}.")
+        return 0
+    for c in found:
+        print(changes.format_change(c))
+    if args.notify:
+        changes.notify(found)
+    return EXIT_CHANGES
+
+
 async def _fetch(cfg, args: argparse.Namespace) -> dict:
     async with BrowserSession(cfg, fresh=args.clear_session) as session:
         client = WebUntisClient(cfg, session)
@@ -571,7 +615,7 @@ def main() -> int:
         return 0
     _setup_logging(args.verbose,
                    quiet=bool(_layout(args) or args.query or args.tests or args.homework
-                              or args.now))
+                              or args.now or args.changes))
     if args.default_args:
         logging.getLogger(__name__).debug(
             "default_args from %s: %s", args.defaults_source, " ".join(args.default_args))

@@ -1,0 +1,13 @@
+# Checks WebUntis for changes and shows them as desktop notifications.
+# Install (user units, no root needed):
+#   cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now untis-changes.timer
+[Unit]
+Description=untis: notify about timetable changes
+
+[Service]
+Type=oneshot
+# Exit code 10 means "changes found", which isn't a failure.
+SuccessExitStatus=10
+ExecStart=%h/.local/bin/untis --changes --notify

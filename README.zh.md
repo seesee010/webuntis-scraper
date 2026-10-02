@@ -220,6 +220,8 @@ untis -H --days-forward 5        # 接下来 5 个上课日内到期的作业
 untis -t -H                      # 两个部分都显示
 untis --now                      # 当前的课和下一节课
 untis --now --format waybar      # 用于 Waybar 自定义模块的 JSON
+untis --changes                  # 自上次 --changes 运行以来的变化
+untis --changes --notify         # ……并作为桌面通知发送
 ```
 
 `--from` / `--to` 支持 `--date` 的所有格式，另外还支持 `today`、`tomorrow` 以及英文或德文的星期名称（`mon`、`monday`、`mo`、`montag` 等）。星期名称指本周的那一天；如果这样 `--to` 会早于 `--from`，则指下周的那一天。
@@ -282,6 +284,14 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 }
 ```
 
+`--changes` 会把课表、考试和作业与上一次 `--changes` 运行时保存的状态（私有地保存在 `~/.local/share/untis/state/`）进行比较，只输出变化：取消的课、代课、换教室、你的班级被移出或消失的课、新增或删除的考试、新作业。只比较两个时间范围都包含的日期。第一次运行只会保存状态。退出码 `10` 表示有变化，`0` 表示没有变化。`--notify` 还会把每条变化作为桌面通知发送（Linux 上用 `notify-send`，macOS 上用 `osascript`）。`contrib/systemd/` 中有一个用户定时器，在上课日每 15 分钟执行一次：
+
+```bash
+cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now untis-changes.timer
+```
+
 输出保存在数据目录（`~/.local/share/untis/` 或项目文件夹）中的 `out/untis_<timestamp>.json` 和
 `out/latest.json`。Cookie 保存在那里的 `sessions/storage_state.json` 中，这样以后运行时不需要
 重新登录。
@@ -310,6 +320,7 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 | `3` | 登录失败 |
 | `4` | 无法连接 WebUntis，或 WebUntis 返回了错误 |
 | `5` | `--start` / `--end` / `--free`：那天没有课（输出 `-`） |
+| `10` | `--changes`：自上次运行以来有变化 |
 | `130` | 用 Ctrl-C 中止 |
 
 ## 输出格式
@@ -355,7 +366,7 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 
 - **密码：** `~/.config/untis/.env`。请设置为只有你能读取（`chmod 600`）。如果其他用户可以读取，`untis` 会发出警告。
 - **登录会话：** 任何拿到 `~/.local/share/untis/sessions/storage_state.json` 的人，都可以在会话过期前冒充你。该文件以 `600` 权限创建，所在目录为 `700`。
-- **输出和调试文件：** `out/`、`cache/`（你的姓名、课表、缺勤记录）和 `logs/`（WebUntis 页面截图）同样是私有的，旧版本留下的文件会在下次运行时自动修正。分享截图前请先检查。
+- **输出和调试文件：** `out/`、`cache/`、`state/`（你的姓名、课表、缺勤记录）和 `logs/`（WebUntis 页面截图）同样是私有的，旧版本留下的文件会在下次运行时自动修正。分享截图前请先检查。
 - **浏览器沙箱：** Chromium 默认启用沙箱。只有在 Docker 等需要的环境中，才在 `config.json` 中设置 `"browser_no_sandbox": true`（以 root 运行时会自动启用）。
 
 ```bash
@@ -379,6 +390,7 @@ rm ~/.local/share/untis/sessions/storage_state.json       # 手动执行同样�
 
 ```
 pyproject.toml      # 包信息、依赖、`untis` 命令
+contrib/systemd/    # 用于 --changes --notify 的用户定时器
 bin/
   untis             # 源码目录的启动脚本
 src/untis/
