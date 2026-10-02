@@ -7,10 +7,12 @@ so we don't have to log in every run.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from .config import ScraperConfig
+from .privacy import make_private
 
 if TYPE_CHECKING:
     from playwright.async_api import Browser, BrowserContext, Page, Playwright
@@ -24,6 +26,19 @@ def async_playwright():
     needed when the browser transport is actually used."""
     from playwright.async_api import async_playwright as _async_playwright
     return _async_playwright()
+
+
+def chromium_args(cfg: ScraperConfig) -> list[str]:
+    """Chromium flags. The sandbox stays on unless asked for (Docker) or
+    when running as root, where Chromium refuses to start with it."""
+    args = [
+        "--disable-blink-features=AutomationControlled",
+        "--disable-dev-shm-usage",
+    ]
+    running_as_root = hasattr(os, "geteuid") and os.geteuid() == 0
+    if cfg.browser_no_sandbox or running_as_root:
+        args += ["--no-sandbox", "--disable-features=IsolateOrigins,site-per-process"]
+    return args
 
 
 def _build_stealth() -> Stealth:
@@ -74,12 +89,7 @@ class BrowserSession:
         self.browser = await self._pw.chromium.launch(
             headless=self.cfg.headless,
             slow_mo=self.cfg.slow_mo_ms,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-features=IsolateOrigins,site-per-process",
-            ],
+            args=chromium_args(self.cfg),
         )
 
         state_path = Path(self.cfg.storage_state_path)
@@ -106,6 +116,7 @@ class BrowserSession:
         try:
             if self.context and self.cfg.storage_state_path:
                 await self.context.storage_state(path=self.cfg.storage_state_path)
+                make_private(Path(self.cfg.storage_state_path))     # login cookies
                 log.debug("Saved storage_state to %s", self.cfg.storage_state_path)
         finally:
             if self.context:
