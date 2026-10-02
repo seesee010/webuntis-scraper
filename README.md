@@ -119,9 +119,18 @@ python -m src -s --days-forward 0       # today only
 ```
 
 `--short` prints one block per school day: time, subject, teacher, room,
-plus `changed` / `cancelled` / `exam` markers. Substitutes show as
-`NEW (for OLD)`, removed teachers are struck through (`~OLD~` without
-colors). Below that come upcoming exams, open homework and a line with
+plus a marker for what happened to the lesson:
+
+| Marker | Meaning |
+|---|---|
+| `cancelled` | the lesson doesn't take place |
+| `removed` | the lesson takes place, but your class was taken out of it |
+| `no teacher` | the teacher was removed and nobody replaces them yet |
+| `changed` | something else changed, e.g. a substitute: `NEW (for OLD)` |
+| `exam` | exam lesson |
+| `event` | an event such as an excursion (`★ title`, with its teachers) |
+
+Removed teachers are struck through (`~OLD~` without colors). Below that come upcoming exams, open homework and a line with
 absences and unread messages. Set `NO_COLOR=1` to disable colors.
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
@@ -168,12 +177,14 @@ add `-v` for the full traceback.
   "timetable": {
     "source": "rest_v1" | "jsonrpc",
     "start": "2026-06-02", "end": "2026-06-16",
+    "own_classes": ["1AXYZ"],
     "days": [
       {"date": "2026-06-02", "entries": [
         {
           "start": "2026-06-02T08:00", "end": "2026-06-02T08:45",
           "status": "REGULAR" | "CHANGED" | "CANCELLED" | ...,
           "is_cancelled": false, "is_exam": false, "is_substitution": false,
+          "is_event": false, "is_removed": false, "no_teacher": false,
           "lesson_text": "", "subjects": [{"short":"M","long":"Math"}],
           "teachers": [{"short":"NEW","long":"...","status":"ADDED","replaces":"OLD"}],
           "classes": [...], "rooms": [...]

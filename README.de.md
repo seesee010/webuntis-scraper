@@ -105,9 +105,19 @@ python -m src --short                   # oder -s
 python -m src -s --days-forward 0       # nur heute
 ```
 
-`--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum, markiert
-`changed` / `cancelled` / `exam`, Supplierungen als `NEU (for ALT)` und
-entfernte Lehrer durchgestrichen (`~ALT~` ohne Farben). Darunter folgen
+`--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum und markiert,
+was mit der Stunde passiert ist:
+
+| Markierung | Bedeutung |
+|---|---|
+| `cancelled` | Entfall, die Stunde findet nicht statt |
+| `removed` | die Stunde findet statt, aber deine Klasse ist ausgetragen |
+| `no teacher` | Lehrer ausgetragen, (noch) keine Supplierung |
+| `changed` | sonstige Änderung, z.B. Supplierung: `NEU (for ALT)` |
+| `exam` | Prüfung |
+| `event` | Veranstaltung, z.B. Exkursion (`★ Titel`, mit Lehrern) |
+
+Entfernte Lehrer werden durchgestrichen (`~ALT~` ohne Farben). Darunter folgen
 Prüfungen, offene Hausaufgaben, Abwesenheiten und ungelesene Nachrichten.
 `NO_COLOR=1` schaltet Farben ab.
 
@@ -155,12 +165,14 @@ mit `-v` gibt es den vollen Traceback.
   "timetable": {
     "source": "rest_v1" | "jsonrpc",
     "start": "2026-06-02", "end": "2026-06-16",
+    "own_classes": ["1AXYZ"],
     "days": [
       {"date": "2026-06-02", "entries": [
         {
           "start": "2026-06-02T08:00", "end": "2026-06-02T08:45",
           "status": "REGULAR" | "CHANGED" | "CANCELLED" | ...,
           "is_cancelled": false, "is_exam": false, "is_substitution": false,
+          "is_event": false, "is_removed": false, "no_teacher": false,
           "lesson_text": "", "subjects": [{"short":"M","long":"Math"}],
           "teachers": [{"short":"NEU","long":"...","status":"ADDED","replaces":"ALT"}],
           "classes": [...], "rooms": [...]

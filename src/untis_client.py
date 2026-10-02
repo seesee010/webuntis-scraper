@@ -494,6 +494,29 @@ class WebUntisClient:
             days.extend(res.get("days") or [])
         return {"days": days}
 
+    async def get_own_classes(self) -> set[str]:
+        """Short names of the classes the user belongs to (students only).
+
+        Needed to tell "your class was removed from a lesson" apart from
+        "another class was removed". Empty set if unknown.
+        """
+        if self._resource_type != "STUDENT":
+            return set()
+        pid, _ = self._require_person()
+        res = await self._rest_get("/timetable/filter", {
+            "resourceType": "STUDENT",
+            "timetableType": "MY_TIMETABLE",
+        })
+        own: set[str] = set()
+        for student in res.get("students") or []:
+            if (student.get("student") or {}).get("id") != pid:
+                continue
+            for entry in student.get("classes") or []:
+                name = (entry.get("class") or {}).get("shortName")
+                if name:
+                    own.add(name)
+        return own
+
     async def get_timetable(self, start: date, end: date) -> list[dict]:
         """Timetable from JSON-RPC `getTimetable` (fallback path)."""
         pid, ptype = self._require_person()

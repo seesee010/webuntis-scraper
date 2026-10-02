@@ -396,6 +396,25 @@ class TestDataFetchers:
         assert result[0]["lesson"]["subject"] == "M"
         assert result[0]["teacher"]["name"] == "GRI"
 
+    async def test_own_classes_from_filter(
+        self, client: WebUntisClient, fake_page: MagicMock,
+    ):
+        client._token = "tok"
+        client._resource_type = "STUDENT"
+        fake_page.evaluate = AsyncMock(return_value={
+            "status": 200, "ok": True, "raw": "{}", "data": {"students": [
+                {"student": {"id": 999}, "classes": [{"class": {"shortName": "OTHER"}}]},
+                {"student": {"id": 12345}, "classes": [
+                    {"class": {"shortName": "CLASS-A"}, "dateRange": {}},
+                ]},
+            ]},
+        })
+        assert await client.get_own_classes() == {"CLASS-A"}
+
+    async def test_own_classes_empty_for_teachers(self, client: WebUntisClient):
+        client._resource_type = "TEACHER"
+        assert await client.get_own_classes() == set()
+
     async def test_refreshes_token_on_401(
         self, client: WebUntisClient, fake_page: MagicMock,
     ):

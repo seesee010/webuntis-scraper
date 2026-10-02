@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
+# Shown for entries without a more specific label (see _label()).
 _STATUS_LABELS = {
     "CHANGED": "changed",
     "SUBSTITUTION": "substitution",
@@ -30,6 +31,7 @@ class _Style:
     def red(self, t: str) -> str: return self._wrap("31", t)
     def yellow(self, t: str) -> str: return self._wrap("33", t)
     def magenta(self, t: str) -> str: return self._wrap("35", t)
+    def blue(self, t: str) -> str: return self._wrap("34", t)
     def cyan(self, t: str) -> str: return self._wrap("36", t)
     def strike(self, t: str) -> str: return self._wrap("9", t)
 
@@ -86,6 +88,9 @@ def _rows_from_grid(timetable: dict) -> dict[str, list[dict]]:
                 "teachers": e.get("teachers") or [],
                 "rooms": _shorts(e.get("rooms") or []),
                 "note": e.get("substitution_text") or e.get("lesson_text") or "",
+                "is_event": e.get("is_event"),
+                "is_removed": e.get("is_removed"),
+                "no_teacher": e.get("no_teacher"),
             })
         days[day.get("date")] = rows
     return days
@@ -111,13 +116,29 @@ def _rows_from_lessons(timetable: dict) -> dict[str, list[dict]]:
     return days
 
 
+def _label(r: dict) -> str:
+    """Most specific label first: what matters for the student wins."""
+    if r.get("is_cancelled"):
+        return "cancelled"
+    if r.get("is_removed"):
+        return "removed"          # your class was taken out of the lesson
+    if r.get("is_exam"):
+        return "exam"
+    if r.get("is_event"):
+        return "event"
+    if r.get("no_teacher"):
+        return "no teacher"
+    return _STATUS_LABELS.get(r.get("status") or "", "")
+
+
 def _render_timetable(timetable: dict, st: _Style) -> list[str]:
     days = _rows_from_grid(timetable) if "days" in timetable else _rows_from_lessons(timetable)
     days = {d: rows for d, rows in days.items() if d and rows}
     if not days:
         return [st.dim("  No lessons in this window.")]
 
-    all_rows = [r for rows in days.values() for r in rows]
+    # Events don't use the columns, so they don't size them either.
+    all_rows = [r for rows in days.values() for r in rows if r["subject"]]
     subj_w = max((len(r["subject"]) for r in all_rows), default=0)
     teach_w = max((len(_teachers(r["teachers"], st)[0]) for r in all_rows), default=0)
     room_w = max((len(r["rooms"]) for r in all_rows), default=0)
@@ -131,27 +152,35 @@ def _render_timetable(timetable: dict, st: _Style) -> list[str]:
             time = f"{r['start']}–{r['end']}" if slot != prev_slot else ""
             prev_slot = slot
 
-            label = "exam" if r["is_exam"] else _STATUS_LABELS.get(r["status"], "")
-            if r["is_cancelled"]:
-                label = "cancelled"
+            label = _label(r)
+            t_plain, t_styled = _teachers(r["teachers"], st)
 
             line = f"  {time:<11}  "
-            if r["subject"]:
-                t_plain, t_styled = _teachers(r["teachers"], st)
+            if r["subject"] and not r.get("is_event"):
                 line += _pad(st.bold(r["subject"]), r["subject"], subj_w) + "  "
                 line += _pad(t_styled, t_plain, teach_w) + "  "
                 line += _pad(st.cyan(r["rooms"]), r["rooms"], room_w)
             else:
-                # Events etc. have no subject: show their title across the columns.
-                line += st.bold(r["title"])
+                # Events have no subject: title across the columns, then
+                # whoever runs them.
+                title = r["title"] or r["subject"]
+                line += st.bold(st.blue(f"★ {title}"))
+                if t_plain:
+                    line += f"  {t_styled}"
+                if r["rooms"]:
+                    line += f"  {st.cyan(r['rooms'])}"
             if r["note"]:
                 line += f"  {st.dim(r['note'])}"
             if not label:
                 line = line.rstrip()
             if label == "cancelled":
                 line = st.dim(st.strike(line)) + "  " + st.red(label)
+            elif label == "removed":
+                line = st.dim(st.strike(line)) + "  " + st.dim(label)
             elif label == "exam":
                 line += "  " + st.magenta(label)
+            elif label == "event":
+                line += "  " + st.blue(label)
             elif label:
                 line += "  " + st.yellow(label)
             out.append(line)

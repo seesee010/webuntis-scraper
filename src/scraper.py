@@ -78,11 +78,17 @@ class Scraper:
         try:
             grid = await self.client.get_timetable_grid(start, end)
             if grid.get("days"):
+                try:
+                    own_classes = await self.client.get_own_classes()
+                except Exception as exc:
+                    log.warning("Could not determine own class: %s", exc)
+                    own_classes = set()
                 self._timetable = {
                     "source": "rest_v1",
                     "start": start.isoformat(),
                     "end": end.isoformat(),
-                    **normalize_timetable_grid(grid),
+                    "own_classes": sorted(own_classes),
+                    **normalize_timetable_grid(grid, own_classes),
                 }
                 return self._timetable
         except Exception as exc:
