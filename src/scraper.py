@@ -25,6 +25,7 @@ class Scraper:
     def __init__(self, cfg: ScraperConfig, client: WebUntisClient):
         self.cfg = cfg
         self.client = client
+        self._timetable: dict[str, Any] | None = None
 
     async def run(self) -> dict[str, Any]:
         today = date.today()
@@ -71,60 +72,59 @@ class Scraper:
     # --- module scrapers ------------------------------------------------
 
     async def _scrape_timetable(self, start: date, end: date) -> dict[str, Any]:
-        """Try the new REST v1 grid first, fall back to JSON-RPC."""
+        """Try the REST v1 grid first, fall back to JSON-RPC."""
+        if self._timetable is not None:
+            return self._timetable
         try:
             grid = await self.client.get_timetable_grid(start, end)
-            if grid and (grid.get("days") or []):
-                return {
+            if grid.get("days"):
+                self._timetable = {
                     "source": "rest_v1",
                     "start": start.isoformat(),
                     "end": end.isoformat(),
                     **normalize_timetable_grid(grid),
                 }
+                return self._timetable
         except Exception as exc:
-            log.debug("REST v1 grid failed, falling back to JSON-RPC: %s", exc)
+            log.warning("REST v1 timetable failed, falling back to JSON-RPC: %s", exc)
 
         raw = await self.client.get_timetable(start, end)
-        lessons = [normalize_timetable_lesson(x) for x in raw]
-        return {
+        self._timetable = {
             "source": "jsonrpc",
             "start": start.isoformat(),
             "end": end.isoformat(),
-            "lessons": lessons,
+            "lessons": [normalize_timetable_lesson(x) for x in raw],
         }
+        return self._timetable
 
     async def _scrape_exams(self, start: date, end: date) -> dict[str, Any]:
-        raw = await self.client.get_exams(start, end)
-        if raw:
+        try:
+            raw = await self.client.get_exams(start, end)
             return {
-                "source": "jsonrpc",
+                "source": "api",
                 "start": start.isoformat(),
                 "end": end.isoformat(),
                 "exams": [normalize_exam(x) for x in raw],
             }
-        # Fallback: extract exam lessons from the timetable (Klausur entries)
-        # so students without getExams access still get their data.
-        log.info("Exam endpoint not available, deriving exams from timetable")
+        except Exception as exc:
+            log.warning("Exam endpoint failed (%s), deriving exams from timetable", exc)
+
         tt = await self._scrape_timetable(start, end)
-        lessons = tt.get("lessons") or []
-        exams = [
-            l for l in lessons
-            if l.get("is_exam")
-            or "Klausur" in (l.get("type") or "")
-            or "Prüfung" in (l.get("type") or "")
-        ]
+        entries = list(tt.get("lessons") or [])
+        for day in tt.get("days") or []:
+            entries.extend(day.get("entries") or [])
         return {
             "source": "timetable_fallback",
             "start": start.isoformat(),
             "end": end.isoformat(),
-            "exams": exams,
-            "note": "Derived from timetable activity types; no dedicated exam endpoint.",
+            "exams": [e for e in entries if e.get("is_exam")],
+            "note": "Derived from the timetable; exam endpoint not available.",
         }
 
     async def _scrape_homework(self, start: date, end: date) -> dict[str, Any]:
         raw = await self.client.get_homework(start, end)
         return {
-            "source": "jsonrpc" if raw else "none",
+            "source": "api",
             "start": start.isoformat(),
             "end": end.isoformat(),
             "items": [normalize_homework(x) for x in raw],
@@ -133,7 +133,7 @@ class Scraper:
     async def _scrape_absences(self, start: date, end: date) -> dict[str, Any]:
         raw = await self.client.get_absences(start, end)
         return {
-            "source": "jsonrpc" if raw else "none",
+            "source": "api",
             "start": start.isoformat(),
             "end": end.isoformat(),
             "items": [normalize_absence(x) for x in raw],
@@ -142,7 +142,7 @@ class Scraper:
     async def _scrape_messages(self) -> dict[str, Any]:
         raw = await self.client.get_messages()
         return {
-            "source": "jsonrpc" if raw else "none",
+            "source": "rest_v1",
             "items": [normalize_message(x) for x in raw],
         }
 

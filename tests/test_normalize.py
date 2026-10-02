@@ -83,6 +83,25 @@ class TestNormalizeGrid:
         assert e["rooms"][0]["short"] == "B2"
         assert e["is_exam"] is False
 
+    def test_positions_grouped_by_type_not_slot(self):
+        grid = {"days": [{"date": "2026-06-02", "gridEntries": [{
+            "status": "CHANGED",
+            "position1": [
+                {"current": {"shortName": "NEW", "type": "TEACHER", "status": "ADDED"},
+                 "removed": {"shortName": "OLD", "type": "TEACHER"}},
+                {"current": None,
+                 "removed": {"shortName": "GONE", "type": "TEACHER", "status": "REMOVED"}},
+            ],
+            "position2": [{"current": {"shortName": "M", "type": "SUBJECT"}}],
+            "position3": None,
+        }]}]}
+        e = normalize_timetable_grid(grid)["days"][0]["entries"][0]
+        assert e["subjects"][0]["short"] == "M"
+        assert e["teachers"][0] == {"short": "NEW", "long": None,
+                                    "status": "ADDED", "replaces": "OLD"}
+        assert e["teachers"][1]["status"] == "REMOVED"
+        assert e["is_substitution"] is True
+
     def test_skips_empty_days(self):
         out = normalize_timetable_grid({"days": []})
         assert out["days"] == []
@@ -91,26 +110,36 @@ class TestNormalizeGrid:
 class TestOtherNormalizers:
     def test_exam(self):
         e = normalize_exam({
-            "id": 1, "examDate": 20260610, "name": "SA Mathe",
-            "su": [{"name": "M"}], "te": [], "ro": [], "kl": [],
+            "id": 1, "examDate": 20260610, "startTime": 945, "endTime": 1135,
+            "name": "SA Mathe", "examType": "Test", "subject": "M",
+            "teachers": ["GRI"], "rooms": ["B2"], "studentClass": ["2BHIT"],
         })
         assert e["name"] == "SA Mathe"
-        assert e["date"] == 20260610
+        assert e["date"] == "2026-06-10"
+        assert e["start_time"] == "09:45"
+        assert e["subjects"] == [{"short": "M", "long": None}]
+        assert e["teachers"][0]["short"] == "GRI"
 
     def test_homework(self):
         h = normalize_homework({
             "id": 1, "text": "S. 42", "dueDate": 20260605, "completed": True,
-            "su": [], "te": [],
+            "lesson": {"subject": "M"}, "teacher": {"name": "GRI"},
         })
         assert h["text"] == "S. 42"
         assert h["completed"] is True
+        assert h["due_date"] == "2026-06-05"
+        assert h["subjects"][0]["short"] == "M"
 
     def test_absence(self):
         a = normalize_absence({
-            "id": 1, "date": 20260601, "status": "EXCUSED",
-            "su": [], "text": "",
+            "id": 1, "startDate": 20260601, "endDate": 20260601,
+            "startTime": 750, "endTime": 1325, "isExcused": True,
+            "excuse": {"excuseStatus": "entsch.", "text": "krank"},
         })
-        assert a["status"] == "EXCUSED"
+        assert a["start_date"] == "2026-06-01"
+        assert a["start_time"] == "07:50"
+        assert a["is_excused"] is True
+        assert a["excuse_status"] == "entsch."
 
     def test_message(self):
         m = normalize_message({
