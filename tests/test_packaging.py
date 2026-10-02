@@ -93,7 +93,7 @@ def test_requirements_txt_installs_the_project():
     assert lines == ["-e ."]
 
 
-# --- --version / python -m untis / bin/untis -----------------------------
+# --- --version / python -m untis ------------------------------------------
 def test_version_flag(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["untis", "--version"])
     with pytest.raises(SystemExit) as exc:
@@ -109,21 +109,7 @@ def test_python_dash_m_untis():
     assert out.returncode == 0 and out.stdout.strip() == f"untis {untis.__version__}"
 
 
-@pytest.mark.skipif(not (REPO / ".venv" / "bin" / "python").exists(),
-                    reason="bin/untis needs the project's .venv")
-def test_launcher_script(tmp_path):
-    link = tmp_path / "untis"
-    link.symlink_to(REPO / "bin" / "untis")       # like ~/.local/bin/untis
-    out = subprocess.run([str(link), "--version"], capture_output=True, text=True,
-                         cwd="/", timeout=60)
-    assert out.returncode == 0 and out.stdout.strip() == f"untis {untis.__version__}"
-
-
-def test_launcher_without_venv_explains(tmp_path):
-    fake = tmp_path / "repo"
-    (fake / "bin").mkdir(parents=True)
-    script = fake / "bin" / "untis"
-    script.write_text((REPO / "bin" / "untis").read_text())
-    script.chmod(0o755)
-    out = subprocess.run([str(script), "--version"], capture_output=True, text=True, timeout=60)
-    assert out.returncode == 1 and "no virtualenv" in out.stderr
+def test_no_separate_launcher():
+    """The `untis` command comes from the console script (pip/pipx install);
+    the old bin/untis shell launcher is gone."""
+    assert not (REPO / "bin").exists()

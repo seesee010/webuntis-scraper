@@ -17,8 +17,8 @@ Par défaut (`--transport auto`), aucun navigateur n'est nécessaire :
 
 1. **Connexion** en envoyant le formulaire de connexion de WebUntis en HTTP simple
    (`/WebUntis/j_spring_security_check`), seulement quand la session enregistrée dans
-   `sessions/storage_state.json` a expiré. WebUntis termine les sessions inactives après un
-   moment (environ 40 min observées), donc cela arrive souvent.
+   `sessions/storage_state.json` a expiré. WebUntis termine les sessions inactives après 15
+   minutes d'inactivité, donc cela arrive souvent.
 2. **Vérification de la session** : `GET /WebUntis/api/token/new` ne renvoie un JWT que
    pour une session connectée. Il fournit le `person_id` et le rôle.
 3. **Appels à l'API** avec le cookie de session (et le JWT comme jeton Bearer pour
@@ -117,12 +117,12 @@ pip install -e ".[dev]"
 playwright install chromium
 ```
 
-`bin/untis` lance la copie du dépôt avec son `.venv`, sans rien installer. Crée un lien
-vers ce fichier dans un dossier de ton `PATH` (`~/.local/bin` est dans le `PATH` de la
-plupart des distributions Linux) :
+`pip install -e` crée aussi la commande `.venv/bin/untis`, qui exécute toujours le code de cette
+copie du dépôt. Crée un lien vers elle dans un dossier de ton `PATH` (`~/.local/bin` est dans le
+`PATH` de la plupart des distributions Linux) :
 
 ```bash
-ln -s "$PWD/bin/untis" ~/.local/bin/untis
+ln -s "$PWD/.venv/bin/untis" ~/.local/bin/untis
 untis -s --today
 ```
 
@@ -420,8 +420,6 @@ rm ~/.local/share/untis/sessions/storage_state.json       # pareil, à la main
 ```
 pyproject.toml      # métadonnées du paquet, dépendances, commande `untis`
 contrib/systemd/    # minuteur utilisateur pour --changes --notify
-bin/
-  untis             # lanceur pour une copie du dépôt
 src/untis/
   __init__.py       # version
   __main__.py       # python -m untis

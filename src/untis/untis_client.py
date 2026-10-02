@@ -20,7 +20,8 @@ Two transports (`cfg.transport`, default "auto"):
 
 Both read and write the same `storage_state` file, so a session from
 one transport is reused by the other. Sessions expire on the server
-after a while of inactivity (~40 min observed), so most runs log in.
+after 15 minutes of inactivity (the server reports
+X-Sessiondurationmilliseconds: 910000), so most runs log in.
 
 Which API serves what (verified against a live UI2020 instance):
 
