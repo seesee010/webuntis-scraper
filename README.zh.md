@@ -1,5 +1,10 @@
 # WebUntis Scraper
 
+![Made With:vibecoding](https://img.shields.io/badge/made%20with-vibecoding-blueviolet?style=plastic)
+![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![pipx](https://img.shields.io/badge/install-pipx-2A6DB2)
+![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-informational)
+
 🇬🇧 [English](README.md) · 🇩🇪 [Deutsch](README.de.md) · 🇫🇷 [Français](README.fr.md) · 🇨🇳 [中文](README.zh.md)
 
 > ⚠️ 本翻译由 AI（Anthropic Claude Opus 5.5）生成，可能有错误或不自然的表达。如有疑问，请以
@@ -7,10 +12,38 @@
 >
 > *This translation was made with AI and may be inaccurate. The English version is authoritative.*
 
-WebUntis 抓取工具（使用普通 HTTP，必要时用 Playwright 作为备用方案）。它可以获取你的课表、考试、作业、缺勤记录和消息，并保存为
-结构化的 JSON。
+<!--
+  TODO：在这里放一个循环播放 `untis --short --next` 的演示 gif。
+  <p align="center"><img src="docs/demo.gif" alt="untis --short --next" width="640"></p>
+-->
 
-## 工作原理
+`untis` 是一个命令行工具，可以把**你的** WebUntis 课表、考试、作业、缺勤记录和消息直接带到
+终端里（也可以保存为结构化的 JSON）。不需要打开浏览器标签页，不需要安装 App，不需要点来点
+去——只要敲一下 `untis`，就能看到今天的课是怎样的。
+
+## 快速开始
+
+```bash
+pipx install git+https://github.com/seesee010/webuntis-scraper
+untis init          # 问几个问题，测试登录，保存配置
+untis --short --next
+```
+
+就这么简单。`untis init` 是推荐的设置方式——它会询问你学校的 WebUntis 网址、用户名和密码，
+帮你测试登录，并写好配置文件，完全不需要手动编辑 JSON。详见下面的[安装](#安装)和[配置](#配置)。
+
+## 你会得到什么
+
+- 你的**课表**，取消的课、代课/换教室和考试都会高亮显示
+- 在终端里直接看的紧凑**每日视图、单行视图或周课表**，带颜色
+- 即将到来的**考试**和**作业**（含截止日期，成绩出来后也会显示）
+- **缺勤记录**和未读**消息**
+- `--now` 用来回答“我现在在上什么课”，还自带一个 [Waybar](https://github.com/Alexays/Waybar) 模块
+- `--changes --notify`，一旦有变化（代课、取消、新作业……）就发桌面通知
+- 每次运行都有结构化的 **JSON** 输出，方便接到别的地方处理
+
+<details>
+<summary><strong>工作原理（技术细节）</strong></summary>
 
 默认情况下（`--transport auto`）不需要浏览器：
 
@@ -40,11 +73,13 @@ WebUntis 抓取工具（使用普通 HTTP，必要时用 Playwright 作为备用
 在浏览器模式下，`playwright-stealth` 会隐藏常见的机器人检测特征
 （`navigator.webdriver`、`navigator.plugins`、`navigator.languages` 等）。
 
+</details>
+
 ## 安装
 
 ### 使用 pipx（推荐）
 
-[pipx](https://pipx.pypa.io) 会把 `untis` 安装为命令，并放在独立的隔离环境中，不会和其他 Python 包冲突。
+[pipx](https://pipx.pypa.io) 会把 `untis` 安装为命令，并放在独立的隔离环境中，不会和其他 Python 包冲突。这是安装 `untis` 的推荐方式——下面的源码安装方式只适合想修改代码本身的人。
 
 **1. 安装 pipx**（只需一次）：
 
@@ -67,7 +102,13 @@ pipx install git+https://github.com/seesee010/webuntis-scraper
 untis --version
 ```
 
-**3. 配置**学校和登录信息：运行 `untis init`（或手动设置，参见[配置](#配置)）。然后：
+**3. 设置账户**：运行 `untis init`（推荐方式——手动设置方法见[配置](#配置)）：
+
+```bash
+untis init
+```
+
+**4. 运行：**
 
 ```bash
 untis -s --today
@@ -88,9 +129,10 @@ pipx uninstall webuntis-scraper
 
 `pipx upgrade` 不会更新从 GitHub 安装的版本（它只检查软件包索引），所以请使用 `pipx reinstall`。
 
-如果你也要修改代码，请改用下面的安装方式。两者都会使用 `~/.local/bin/untis`，所以不要同时安装。
+<details>
+<summary><strong>从源码目录安装（给贡献者）</strong></summary>
 
-### 从源码目录安装（开发）
+如果你想修改代码本身，请用这种方式代替 pipx。两者都会使用 `~/.local/bin/untis`，所以不要同时安装。
 
 Linux / macOS:
 
@@ -119,21 +161,27 @@ ln -s "$PWD/.venv/bin/untis" ~/.local/bin/untis
 untis -s --today
 ```
 
+</details>
+
 ## 配置
+
+**`untis init` 是推荐的设置方式**——它会询问你学校的任意一个 WebUntis 网址（登录页面，或新界面
+的任意页面，例如 `…/today`；这时会通过 WebUntis 公开的学校搜索找到学校）、用户名和密码，测试
+登录，然后写入 `config.json` 和 `.env`（权限 `600`）。已有的文件会被更新而不是替换，密码永远
+不会显示。如果账户使用双重验证或 SSO，请加上 `--no-verify`。
+
+```bash
+untis init                                         # 交互式：学校网址、用户名、密码、登录测试
+untis init --search "School name"                  # 改为按学校名称搜索
+untis init --url URL --username NAME < password    # 用于脚本（密码从 stdin 读取）
+```
 
 程序会在 `~/.config/untis/`（或 `$XDG_CONFIG_HOME/untis/`）中查找配置文件。会话、输出文件和调试截图
 会保存到 `~/.local/share/untis/`，所以可以在任何目录下运行 `untis`。如果没有
 `~/.config/untis/config.json`，所有文件都会使用项目文件夹（适合 Windows 或开发时使用）。
 
-**快速设置：** `untis init` 会询问你学校的任意一个 WebUntis 网址（登录页面，或新界面的任意页面，例如 `…/today`；这时会通过 WebUntis 公开的学校搜索找到学校）、用户名和密码，测试登录，然后写入 `config.json` 和 `.env`（权限 `600`）。已有的文件会被更新而不是替换，密码永远不会显示。如果账户使用双重验证或 SSO，请加上 `--no-verify`。
-
-```bash
-untis init                                         # 交互式：学校网址、用户名、密码、登录测试
-untis init --search "School name"                  # 改为按学校名称搜索
-untis init --url URL --username NAME < password   # 用于脚本（密码从 stdin 读取）
-```
-
-**或者手动设置：**
+<details>
+<summary><strong>改为手动配置</strong></summary>
 
 1. 创建配置目录并复制示例配置：
 
@@ -183,7 +231,39 @@ untis init --url URL --username NAME < password   # 用于脚本（密码从 std
 
    显式给出的选项优先：`untis --transport browser` 会替换默认的 `--transport http`；显式的时间范围（`--week`、`--from`、`--days-forward` 等）会替换默认的时间范围，而不会产生冲突。开关选项可以用 `--no-short`、`--no-keep-raw`、`--no-calendar-days` 或 `--no-verbose` 在单次运行中关闭。`UNTIS_DEFAULT_ARGS` 的作用相同，并且优先于配置文件；`--config`、`--env`、`--help` 和 `--version` 不能作为默认参数。`untis -v` 会显示实际使用的参数。
 
+</details>
+
 ## 使用方法
+
+日常会用到的命令：
+
+```bash
+untis                      # 默认运行（无界面，重复使用已保存的会话）
+untis -s --today           # 今天的紧凑视图
+untis -s --next            # 下一个有课的上课日的紧凑视图
+untis -s --week            # 本周（周一到周日）
+untis --now                # 当前的课和下一节课
+untis --tests               # 所有即将到来的考试
+untis --homework             # 所有未完成的作业
+untis --changes --notify   # 自上次以来的变化，作为桌面通知
+```
+
+`--short`（或 `-s`）为每个上课日显示一块内容：时间、科目、老师、教室，以及这节课发生了什么
+（取消、代课、考试、活动……），在终端里带颜色显示。对于今天，视图还会显示你现在所处的位置——
+正在上的课会带有 `▶` 和剩余时间：
+
+```
+  07:50–09:35  MATH  TCH1  R101                       (dimmed: already over)
+▶ 09:40–10:30  GER   TCH2  R101   now · 18 min left
+  10:45–11:35  PROG  TCH3  R101
+
+  ──── now 10:37 · next in 8 min ────                 (in a break)
+```
+
+`untis --legend` 会显示每种颜色和标记的含义。
+
+<details>
+<summary><strong>完整命令参考</strong></summary>
 
 ```bash
 # 默认运行（无界面，重复使用已保存的会话）
@@ -238,7 +318,7 @@ untis --changes --notify         # ……并作为桌面通知发送
 
 每次真正运行都会把数据保存到 `~/.local/share/untis/cache/last.json`（私有，不含 `raw`）。`--offline` 只使用这里的数据，从不联网；如果缓存不包含所请求的日期（或来自其他账户），会给出提示并以代码 4 退出。`--max-age` 在缓存足够新且包含所请求的范围时使用缓存，否则重新获取。来自缓存的结果会在标题中显示数据的年龄，例如 `(cached, 14 min old)`，并且不会写入新的 JSON 文件。
 
-`--short` 为每个上课日显示一块内容：时间、科目、老师、教室，以及这节课发生了什么：
+### `--short` 标记
 
 | 标记 | 颜色 | 含义 |
 |---|---|---|
@@ -252,23 +332,11 @@ untis --changes --notify         # ……并作为桌面通知发送
 被移除的老师会显示删除线（没有颜色时显示为 `~原老师~`）。每天的标题会显示当天实际开始和结束上课的
 时间，例如 `Mon 05.10.  07:50–13:25`。
 
-对于今天，每日视图还会显示你现在所处的位置：正在上的课会带有 `▶` 和剩余时间，已经结束的课会变暗；
-在课间或上课前，会有一条 “now” 线显示下一节课什么时候开始。被取消的课不会被标记为当前课程，放学后不会
-标记任何内容。
-
-```
-  07:50–09:35  MATH  TCH1  R101                       (dimmed: already over)
-▶ 09:40–10:30  GER   TCH2  R101   now · 18 min left
-  10:45–11:35  PROG  TCH3  R101
-
-  ──── now 10:37 · next in 8 min ────                 (in a break)
-```
-
 `--tomorrow` 和 `--next` 会查看真实的课表，所以会跳过周末、假期和所有课都取消的日子；这时当天的
 标题会显示 `(next school day)`。
 
-在每天的课表下面，会显示即将到来的考试、未完成的作业，以及一行缺勤和未读消息的统计。设置
-只有在终端中才会显示颜色；`--color always` 强制显示颜色（例如用于 `less -R`），`--color never` 或 `NO_COLOR=1` 会关闭颜色。`untis --legend` 会显示每种颜色和标记的含义。
+在每天的课表下面，会显示即将到来的考试、未完成的作业，以及一行缺勤和未读消息的统计。
+只有在终端中才会显示颜色；`--color always` 强制显示颜色（例如用于 `less -R`），`--color never` 或 `NO_COLOR=1` 会关闭颜色。
 
 另外还有两种紧凑的显示方式。`--oneline` 每天显示一行，按学校的课时表每节课一个条目（连堂课出现两次，空闲课时显示为 `-`，并行的小组显示为 `NET/PROG`）。`--table` 显示一个表格，日期为列、课时为行，每周一个表格，宽度适应终端，后面和 `-s` 一样显示考试和作业。两种方式使用相同的颜色；没有颜色时，`*` 表示有变化，`~X~` 表示课程取消或被移出，`!` 表示考试。
 
@@ -306,18 +374,6 @@ systemctl --user enable --now untis-changes.timer
 `out/latest.json`。Cookie 保存在那里的 `sessions/storage_state.json` 中，这样以后运行时不需要
 重新登录。
 
-### 登录有问题？
-
-如果用户名和密码正确，但登录还是失败（`Form login did not redirect away from the login page`），
-请检查：
-
-1. **服务器和学校标识正确吗？** 在 `webuntis.com` 上搜索你的学校；跳转后的网址是
-   `https://<server>.webuntis.com/WebUntis/?school=<slug>`。
-2. **密码里有特殊字符吗？** `.env` 支持 `=` 和引号，但开头的空格会被删除。
-3. **有验证码 / SSO / 双重验证（2FA）吗？** → `untis --transport browser --no-headless --form-login`
-4. **截图：** 数据目录中的 `logs/login_failed.png` 显示了浏览器看到的页面。
-5. **详细输出：** `untis -v`。
-
 ### 退出码
 
 错误会以一行文字输出到 stderr（`untis: login failed: …`）；加上 `-v` 可以看到完整的错误追踪。
@@ -333,7 +389,49 @@ systemctl --user enable --now untis-changes.timer
 | `10` | `--changes`：自上次运行以来有变化 |
 | `130` | 用 Ctrl-C 中止 |
 
-## 输出格式
+</details>
+
+### 登录有问题？
+
+如果用户名和密码正确，但登录还是失败（`Form login did not redirect away from the login page`），
+请检查：
+
+1. **服务器和学校标识正确吗？** 在 `webuntis.com` 上搜索你的学校；跳转后的网址是
+   `https://<server>.webuntis.com/WebUntis/?school=<slug>`。
+2. **密码里有特殊字符吗？** `.env` 支持 `=` 和引号，但开头的空格会被删除。
+3. **有验证码 / SSO / 双重验证（2FA）吗？** → `untis --transport browser --no-headless --form-login`
+4. **截图：** 数据目录中的 `logs/login_failed.png` 显示了浏览器看到的页面。
+5. **详细输出：** `untis -v`。
+
+## 安全
+
+`untis` 会保存个人数据，因此只允许你的用户账户读取这些数据：
+
+- **密码：** `~/.config/untis/.env`。`untis init` 会自动设置为只有你能读取（`chmod 600`）。如果其他用户可以读取，`untis` 会发出警告。
+- **登录会话：** 任何拿到 `~/.local/share/untis/sessions/storage_state.json` 的人，都可以在会话过期前冒充你。该文件以 `600` 权限创建，所在目录为 `700`。
+- **输出和调试文件：** `out/`、`cache/`、`state/`（你的姓名、课表、缺勤记录）和 `logs/`（WebUntis 页面截图）同样是私有的，旧版本留下的文件会在下次运行时自动修正。分享截图前请先检查。
+- **浏览器沙箱：** Chromium 默认启用沙箱。只有在 Docker 等需要的环境中，才在 `config.json` 中设置 `"browser_no_sandbox": true`（以 root 运行时会自动启用）。
+
+```bash
+untis --clear-session                                     # 退出登录：删除保存的会话
+```
+
+<details>
+<summary><strong>说明</strong></summary>
+
+- **双重验证 / 验证码**：如果学校要求一次性验证码（OTP），先用 `--no-headless --clear-session`
+  运行一次并输入验证码，之后就可以用无界面模式运行。
+- **考试**：数据来自 `/api/exams`。如果这个接口不可用，会从课表中推断考试
+  （`source: "timetable_fallback"`）。
+- **请求频率限制**：最多每 300 毫秒发送一次请求。
+- **原始数据**：不加 `--keep-raw` 时，所有 `raw` 字段都会被删除。
+- **存储**：在项目文件夹中，`sessions/`、`out/`、`logs/`、`config.json` 和 `.env` 都已写入
+  `.gitignore`。
+
+</details>
+
+<details>
+<summary><strong>输出格式（用于脚本 / 集成）</strong></summary>
 
 ```jsonc
 {
@@ -370,33 +468,10 @@ systemctl --user enable --now untis-changes.timer
 }
 ```
 
-## 安全
+</details>
 
-`untis` 会保存个人数据，因此只允许你的用户账户读取这些数据：
-
-- **密码：** `~/.config/untis/.env`。请设置为只有你能读取（`chmod 600`）。如果其他用户可以读取，`untis` 会发出警告。
-- **登录会话：** 任何拿到 `~/.local/share/untis/sessions/storage_state.json` 的人，都可以在会话过期前冒充你。该文件以 `600` 权限创建，所在目录为 `700`。
-- **输出和调试文件：** `out/`、`cache/`、`state/`（你的姓名、课表、缺勤记录）和 `logs/`（WebUntis 页面截图）同样是私有的，旧版本留下的文件会在下次运行时自动修正。分享截图前请先检查。
-- **浏览器沙箱：** Chromium 默认启用沙箱。只有在 Docker 等需要的环境中，才在 `config.json` 中设置 `"browser_no_sandbox": true`（以 root 运行时会自动启用）。
-
-```bash
-chmod 600 ~/.config/untis/.env                            # 只有你能读取密码
-untis --clear-session                                     # 退出登录：删除保存的会话
-rm ~/.local/share/untis/sessions/storage_state.json       # 手动执行同样的操作
-```
-
-## 说明
-
-- **双重验证 / 验证码**：如果学校要求一次性验证码（OTP），先用 `--no-headless --clear-session`
-  运行一次并输入验证码，之后就可以用无界面模式运行。
-- **考试**：数据来自 `/api/exams`。如果这个接口不可用，会从课表中推断考试
-  （`source: "timetable_fallback"`）。
-- **请求频率限制**：最多每 300 毫秒发送一次请求。
-- **原始数据**：不加 `--keep-raw` 时，所有 `raw` 字段都会被删除。
-- **存储**：在项目文件夹中，`sessions/`、`out/`、`logs/`、`config.json` 和 `.env` 都已写入
-  `.gitignore`。
-
-## 项目结构
+<details>
+<summary><strong>项目结构（给贡献者）</strong></summary>
 
 ```
 pyproject.toml      # 包信息、依赖、`untis` 命令
@@ -414,3 +489,5 @@ src/untis/
   exporter.py       # JSON 输出
   summary.py        # --short 每日视图
 ```
+
+</details>
