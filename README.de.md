@@ -1,12 +1,47 @@
 # WebUntis Scraper
 
+![Made With:vibecoding](https://img.shields.io/badge/made%20with-vibecoding-blueviolet?style=plastic)
+![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![pipx](https://img.shields.io/badge/install-pipx-2A6DB2)
+![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-informational)
+
 🇬🇧 [English](README.md) · 🇩🇪 [Deutsch](README.de.md) · 🇫🇷 [Français](README.fr.md) · 🇨🇳 [中文](README.zh.md)
 
-Scraper für WebUntis (per HTTP, mit Playwright als Fallback). Lädt Stundenplan, Prüfungen /
-Klausuren, Hausaufgaben, Absenzen und Nachrichten und speichert sie als
-strukturiertes JSON.
+<!--
+  TODO: Demo-GIF hier, in Dauerschleife `untis --short --next`.
+  <p align="center"><img src="docs/demo.gif" alt="untis --short --next" width="640"></p>
+-->
 
-## Wie es funktioniert
+`untis` ist ein Kommandozeilen-Tool, das **deinen** WebUntis-Stundenplan, Prüfungen,
+Hausaufgaben, Abwesenheiten und Nachrichten ins Terminal holt (und als strukturiertes JSON,
+falls gewünscht). Kein Browser-Tab, keine App, kein Rumklicken — einfach `untis` eintippen und
+sehen, was an dem Schultag los ist.
+
+## Schnellstart
+
+```bash
+pipx install git+https://github.com/seesee010/webuntis-scraper
+untis init          # stellt ein paar Fragen, testet den Login, speichert die Config
+untis --short --next
+```
+
+Das war's. `untis init` ist der empfohlene Weg, alles einzurichten — es fragt nach der
+WebUntis-URL deiner Schule, Benutzername und Passwort, prüft den Login für dich und schreibt
+die Config-Dateien. Kein händisches Bearbeiten von JSON nötig. Details dazu in
+[Installation](#installation) und [Konfiguration](#konfiguration).
+
+## Was du bekommst
+
+- Deinen **Stundenplan**, mit hervorgehobenen Entfällen, Raum-/Lehrer-Supplierungen und Prüfungen
+- Eine kompakte **Tages-, Einzeilen- oder Wochenraster-Ansicht** direkt im Terminal, mit Farben
+- Kommende **Prüfungen** und **Hausaufgaben** (mit Fälligkeit, Noten sobald vorhanden)
+- **Abwesenheiten** und ungelesene **Nachrichten**
+- `--now` für „welche Stunde habe ich gerade“, inklusive fertigem [Waybar](https://github.com/Alexays/Waybar)-Modul
+- `--changes --notify` für Desktop-Benachrichtigungen, sobald sich etwas ändert (Supplierung, Entfall, neue Hausaufgabe, …)
+- Strukturierte **JSON**-Ausgabe bei jedem Lauf, falls du sie weiterverarbeiten willst
+
+<details>
+<summary><strong>Wie es funktioniert (technisch)</strong></summary>
 
 Standardmäßig (`--transport auto`) wird kein Browser gebraucht:
 
@@ -43,11 +78,13 @@ Session-Datei.
 Bot-Detection-Vektoren (`navigator.webdriver`, `navigator.plugins`,
 `navigator.languages`, …).
 
+</details>
+
 ## Installation
 
 ### Mit pipx (empfohlen)
 
-[pipx](https://pipx.pypa.io) installiert `untis` als Befehl in einer eigenen, abgeschotteten Umgebung, so dass es nicht mit anderen Python-Paketen kollidiert.
+[pipx](https://pipx.pypa.io) installiert `untis` als Befehl in einer eigenen, abgeschotteten Umgebung, so dass es nicht mit anderen Python-Paketen kollidiert. Das ist der Weg, `untis` zu installieren — das Checkout-Setup weiter unten ist nur für Leute, die am Code selbst etwas ändern wollen.
 
 **1. pipx installieren** (einmalig):
 
@@ -71,7 +108,13 @@ pipx install git+https://github.com/seesee010/webuntis-scraper
 untis --version
 ```
 
-**3. Schule und Login einrichten** mit `untis init` (oder von Hand, siehe [Konfiguration](#konfiguration)). Danach:
+**3. Account einrichten** mit `untis init` (empfohlener Weg — siehe [Konfiguration](#konfiguration) für den manuellen Weg):
+
+```bash
+untis init
+```
+
+**4. Loslegen:**
 
 ```bash
 untis -s --today
@@ -92,9 +135,11 @@ pipx uninstall webuntis-scraper
 
 `pipx upgrade` aktualisiert Installationen von GitHub nicht (es prüft nur Paket-Indizes), deshalb `pipx reinstall` verwenden.
 
-Wenn du auch am Code arbeitest, nimm stattdessen das Setup unten. Beide wollen `~/.local/bin/untis` sein, also nicht beides installieren.
+<details>
+<summary><strong>Aus einem Checkout (für Mitwirkende)</strong></summary>
 
-### Aus einem Checkout (Entwicklung)
+Wer am Code selbst arbeiten will, nimmt das statt pipx. Beide wollen `~/.local/bin/untis`
+sein, also nicht beides gleichzeitig installieren.
 
 Linux / macOS:
 
@@ -124,23 +169,30 @@ ln -s "$PWD/.venv/bin/untis" ~/.local/bin/untis
 untis -s --today
 ```
 
+</details>
+
 ## Konfiguration
 
-Die Config wird in `~/.config/untis/` (bzw. `$XDG_CONFIG_HOME/untis/`)
-gesucht. Sessions, Output und Debug-Screenshots landen dann in
-`~/.local/share/untis/` - `untis` funktioniert so aus jedem Ordner.
-Ohne `~/.config/untis/config.json` wird für alles der Projektordner
-verwendet (z.B. unter Windows oder zum Entwickeln).
-
-**Schnelle Einrichtung:** `untis init` fragt nach einer beliebigen WebUntis-URL deiner Schule (der Login-Seite oder einer Seite der neuen Oberfläche wie `…/today`; die Schule wird dann über die öffentliche WebUntis-Schulsuche ermittelt), nach Benutzername und Passwort, testet den Login und schreibt `config.json` und `.env` (Rechte `600`). Bestehende Dateien werden aktualisiert, nicht ersetzt, und das Passwort wird nie angezeigt. Bei 2FA/SSO-Accounts `--no-verify` anhängen.
+**`untis init` ist der empfohlene Weg** — es fragt nach einer beliebigen WebUntis-URL deiner
+Schule (der Login-Seite oder einer Seite der neuen Oberfläche wie `…/today`; die Schule wird
+dann über die öffentliche WebUntis-Schulsuche ermittelt), nach Benutzername und Passwort,
+testet den Login und schreibt `config.json` und `.env` für dich (Rechte `600`). Bestehende
+Dateien werden aktualisiert, nicht ersetzt, und das Passwort wird nie angezeigt. Bei
+2FA/SSO-Accounts `--no-verify` anhängen.
 
 ```bash
 untis init                                         # interaktiv: Schul-URL, Benutzername, Passwort, Login-Test
 untis init --search "School name"                  # Schule stattdessen per Name suchen
-untis init --url URL --username NAME < password   # für Skripte (Passwort über stdin)
+untis init --url URL --username NAME < password    # für Skripte (Passwort über stdin)
 ```
 
-**Oder von Hand:**
+Die Config wird in `~/.config/untis/` (bzw. `$XDG_CONFIG_HOME/untis/`) gesucht. Sessions,
+Output und Debug-Screenshots landen dann in `~/.local/share/untis/` — `untis` funktioniert so
+aus jedem Ordner. Ohne `~/.config/untis/config.json` wird für alles der Projektordner
+verwendet (z.B. unter Windows oder zum Entwickeln).
+
+<details>
+<summary><strong>Stattdessen von Hand konfigurieren</strong></summary>
 
 1. Config-Ordner anlegen und Beispiel-Config kopieren:
 
@@ -191,9 +243,42 @@ untis init --url URL --username NAME < password   # für Skripte (Passwort über
 
    Explizite Optionen gewinnen: `untis --transport browser` ersetzt ein voreingestelltes `--transport http`, und ein explizites Zeitfenster (`--week`, `--from`, `--days-forward`, …) ersetzt das voreingestellte, statt mit ihm zu kollidieren. Schalter lassen sich für einen Lauf mit `--no-short`, `--no-keep-raw`, `--no-calendar-days` oder `--no-verbose` abschalten. `UNTIS_DEFAULT_ARGS` funktioniert genauso und hat Vorrang vor der Config; `--config`, `--env`, `--help` und `--version` sind als Standard nicht erlaubt. `untis -v` zeigt die tatsächlich verwendeten Argumente.
 
+</details>
+
 ## Nutzung
 
-```powershell
+Die Befehle für den Alltag:
+
+```bash
+untis                      # Standard-Lauf (headless, gespeicherte Session wird wiederverwendet)
+untis -s --today           # kompakte Ansicht für heute
+untis -s --next            # kompakte Ansicht für den nächsten Schultag mit Unterricht
+untis -s --week            # diese Woche, Mo–So
+untis --now                # die aktuelle und die nächste Stunde
+untis --tests               # alle kommenden Tests / Prüfungen
+untis --homework             # alle offenen Hausaufgaben
+untis --changes --notify   # was sich seit dem letzten Mal geändert hat, als Desktop-Benachrichtigung
+```
+
+`--short` (bzw. `-s`) zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum und markiert, was mit
+der Stunde passiert ist (Entfall, Supplierung, Prüfung, Veranstaltung, …), farbig im Terminal.
+Für heute zeigt die Ansicht außerdem, wo du gerade bist — die laufende Stunde bekommt ein `▶`
+und die Restzeit:
+
+```
+  07:50–09:35  MATH  TCH1  R101                       (dimmed: already over)
+▶ 09:40–10:30  GER   TCH2  R101   now · 18 min left
+  10:45–11:35  PROG  TCH3  R101
+
+  ──── now 10:37 · next in 8 min ────                 (in a break)
+```
+
+`untis --legend` zeigt, was jede Farbe und Markierung bedeutet.
+
+<details>
+<summary><strong>Vollständige Befehlsübersicht</strong></summary>
+
+```bash
 # Standard-Lauf (headless, gespeicherte Session wird wiederverwendet)
 untis
 
@@ -246,8 +331,7 @@ untis --changes --notify         # … und als Desktop-Benachrichtigungen
 
 Jeder echte Lauf speichert seine Daten in `~/.local/share/untis/cache/last.json` (privat, ohne `raw`). `--offline` antwortet nur von dort und greift nie aufs Netzwerk zu; deckt der Cache die gewünschten Tage nicht ab (oder stammt er von einem anderen Account), sagt es das und beendet sich mit Code 4. `--max-age` nutzt den Cache, wenn er jung genug ist und die Anfrage abdeckt, sonst wird geladen. Antworten aus dem Cache zeigen ihr Alter im Kopf, z.B. `(cached, 14 min old)`, und schreiben keine neuen JSON-Dateien.
 
-`--short` zeigt pro Schultag Uhrzeit, Fach, Lehrer und Raum und markiert,
-was mit der Stunde passiert ist:
+### `--short` Markierungen
 
 | Markierung | Farbe | Bedeutung |
 |---|---|---|
@@ -262,26 +346,12 @@ Entfernte Lehrer werden durchgestrichen (`~ALT~` ohne Farben). Der
 Tageskopf zeigt, wann die Schule an dem Tag wirklich beginnt und endet,
 z.B. `Mon 05.10.  07:50–13:25`.
 
-Für heute zeigt die Tagesansicht außerdem, wo du gerade bist: Die laufende
-Stunde bekommt ein `▶` und die Restzeit, vergangene Stunden werden
-abgedunkelt, und in der Pause oder vor Schulbeginn zeigt eine „now“-Linie,
-wann die nächste Stunde beginnt. Entfallene Stunden werden nie als aktuell
-markiert, nach Schulschluss wird nichts markiert.
-
-```
-  07:50–09:35  MATH  TCH1  R101                       (dimmed: already over)
-▶ 09:40–10:30  GER   TCH2  R101   now · 18 min left
-  10:45–11:35  PROG  TCH3  R101
-
-  ──── now 10:37 · next in 8 min ────                 (in a break)
-```
-
 `--tomorrow` und `--next` schauen in den echten Stundenplan: Wochenenden,
 Ferien und Tage, an denen alles entfällt, werden übersprungen; im
 Tageskopf steht dann `(next school day)`.
 
 Unter den Tagen folgen Prüfungen, offene Hausaufgaben, Abwesenheiten und
-ungelesene Nachrichten. Farben gibt es nur im Terminal; `--color always` erzwingt sie (z.B. für `less -R`), `--color never` oder `NO_COLOR=1` schaltet sie ab. `untis --legend` zeigt, was jede Farbe und Markierung bedeutet.
+ungelesene Nachrichten. Farben gibt es nur im Terminal; `--color always` erzwingt sie (z.B. für `less -R`), `--color never` oder `NO_COLOR=1` schaltet sie ab.
 
 Zwei weitere kompakte Ansichten. `--oneline` zeigt eine Zeile pro Tag, mit einem Eintrag pro Stunde des Zeitrasters der Schule (eine Doppelstunde erscheint zweimal, eine Freistunde als `-`, parallele Gruppen als `NET/PROG`). `--table` zeigt ein Raster mit den Tagen als Spalten und den Stunden als Zeilen, eine Tabelle pro Woche, passend zur Terminalbreite, danach wie bei `-s` Prüfungen und Hausaufgaben. Beide verwenden dieselben Farben; ohne Farben markiert `*` eine Änderung, `~X~` eine entfallene oder ausgetragene Stunde und `!` eine Prüfung.
 
@@ -320,20 +390,6 @@ im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In
 `sessions/storage_state.json` werden dort Cookies gespeichert, damit
 Folge-Läufe kein erneutes Login brauchen.
 
-### Login-Fehler?
-
-Falls der Login fehlschlägt (`Form login did not redirect away from the
-login page`), obwohl die Credentials stimmen, prüfe:
-
-1. **Server + Slug korrekt?** Auf `webuntis.com` deine Schule suchen -
-   die Redirect-URL lautet `https://<server>.webuntis.com/WebUntis/?school=<slug>`.
-2. **Sonderzeichen im Passwort?** `.env` unterstützt `=` und Quotes,
-   aber führende Whitespaces werden getrimmt. Test mit `python -c "import
-   os; print(repr(os.environ['UNTIS_PASSWORD']))"`.
-3. **CAPTCHA / SSO / 2FA?** → `untis --transport browser --no-headless --form-login`
-4. **Screenshot:** `logs/login_failed.png` zeigt, was der Browser sah.
-5. **Verbose-Output:** `untis -v`.
-
 ### Exit-Codes
 
 Fehler erscheinen als eine Zeile auf stderr (`untis: login failed: …`);
@@ -350,7 +406,52 @@ mit `-v` gibt es den vollen Traceback.
 | `10` | `--changes`: seit dem letzten Lauf hat sich etwas geändert |
 | `130` | mit Strg-C abgebrochen |
 
-## Output-Schema
+</details>
+
+### Login-Fehler?
+
+Falls der Login fehlschlägt (`Form login did not redirect away from the
+login page`), obwohl die Credentials stimmen, prüfe:
+
+1. **Server + Slug korrekt?** Auf `webuntis.com` deine Schule suchen -
+   die Redirect-URL lautet `https://<server>.webuntis.com/WebUntis/?school=<slug>`.
+2. **Sonderzeichen im Passwort?** `.env` unterstützt `=` und Quotes,
+   aber führende Whitespaces werden getrimmt. Test mit `python -c "import
+   os; print(repr(os.environ['UNTIS_PASSWORD']))"`.
+3. **CAPTCHA / SSO / 2FA?** → `untis --transport browser --no-headless --form-login`
+4. **Screenshot:** `logs/login_failed.png` zeigt, was der Browser sah.
+5. **Verbose-Output:** `untis -v`.
+
+## Sicherheit
+
+`untis` speichert persönliche Daten und hält sie deshalb nur für dein Benutzerkonto lesbar:
+
+- **Passwort:** `~/.config/untis/.env`. Wird von `untis init` automatisch nur für dich lesbar gemacht (`chmod 600`). `untis` warnt, wenn andere Nutzer die Datei lesen können.
+- **Login-Session:** Mit den Cookies in `~/.local/share/untis/sessions/storage_state.json` kann jeder, der die Datei hat, bis zum Ablauf der Session als du auftreten. Die Datei wird mit Rechten `600` in einem `700`-Ordner angelegt.
+- **Output und Debug-Dateien:** `out/`, `cache/`, `state/` (dein Name, Stundenplan, Abwesenheiten) und `logs/` (Screenshots der WebUntis-Seite) sind ebenfalls privat, Dateien älterer Versionen werden beim nächsten Lauf korrigiert. Screenshots vor dem Teilen prüfen.
+- **Browser-Sandbox:** Chromium läuft mit eingeschalteter Sandbox. Nur in Docker oder ähnlichen Umgebungen, die es brauchen, `"browser_no_sandbox": true` in `config.json` setzen (als root wird es automatisch aktiviert).
+
+```bash
+untis --clear-session                                     # abmelden: gespeicherte Session verwerfen
+```
+
+<details>
+<summary><strong>Hinweise</strong></summary>
+
+- **2FA / Captcha**: Falls deine Schule OTP verlangt, einmalig mit
+  `--no-headless --clear-session` laufen lassen, Code eintippen, dann
+  ab sofort headless.
+- **Prüfungen**: kommen aus `/api/exams`. Falls der Endpoint nicht
+  verfügbar ist, werden Prüfungen aus dem Stundenplan abgeleitet
+  (`source: "timetable_fallback"`).
+- **Rate-Limit**: Wir senden höchstens eine Anfrage alle 300 ms.
+- **Rohdaten**: ohne `--keep-raw` werden alle `raw`-Felder entfernt.
+- **Speicherort**: `sessions/` und `out/` sind in `.gitignore`.
+
+</details>
+
+<details>
+<summary><strong>Output-Schema (für Skripte / Integrationen)</strong></summary>
 
 ```jsonc
 {
@@ -387,34 +488,10 @@ mit `-v` gibt es den vollen Traceback.
 }
 ```
 
-## Sicherheit
+</details>
 
-`untis` speichert persönliche Daten und hält sie deshalb nur für dein Benutzerkonto lesbar:
-
-- **Passwort:** `~/.config/untis/.env`. Nur für dich lesbar machen (`chmod 600`). `untis` warnt, wenn andere Nutzer die Datei lesen können.
-- **Login-Session:** Mit den Cookies in `~/.local/share/untis/sessions/storage_state.json` kann jeder, der die Datei hat, bis zum Ablauf der Session als du auftreten. Die Datei wird mit Rechten `600` in einem `700`-Ordner angelegt.
-- **Output und Debug-Dateien:** `out/`, `cache/`, `state/` (dein Name, Stundenplan, Abwesenheiten) und `logs/` (Screenshots der WebUntis-Seite) sind ebenfalls privat, Dateien älterer Versionen werden beim nächsten Lauf korrigiert. Screenshots vor dem Teilen prüfen.
-- **Browser-Sandbox:** Chromium läuft mit eingeschalteter Sandbox. Nur in Docker oder ähnlichen Umgebungen, die es brauchen, `"browser_no_sandbox": true` in `config.json` setzen (als root wird es automatisch aktiviert).
-
-```bash
-chmod 600 ~/.config/untis/.env                            # nur du kannst dein Passwort lesen
-untis --clear-session                                     # abmelden: gespeicherte Session verwerfen
-rm ~/.local/share/untis/sessions/storage_state.json       # dasselbe von Hand
-```
-
-## Hinweise
-
-- **2FA / Captcha**: Falls deine Schule OTP verlangt, einmalig mit
-  `--no-headless --clear-session` laufen lassen, Code eintippen, dann
-  ab sofort headless.
-- **Prüfungen**: kommen aus `/api/exams`. Falls der Endpoint nicht
-  verfügbar ist, werden Prüfungen aus dem Stundenplan abgeleitet
-  (`source: "timetable_fallback"`).
-- **Rate-Limit**: Wir senden höchstens eine Anfrage alle 300 ms.
-- **Rohdaten**: ohne `--keep-raw` werden alle `raw`-Felder entfernt.
-- **Speicherort**: `sessions/` und `out/` sind in `.gitignore`.
-
-## Projektstruktur
+<details>
+<summary><strong>Projektstruktur (für Mitwirkende)</strong></summary>
 
 ```
 pyproject.toml      # Paket-Metadaten, Abhängigkeiten, `untis`-Befehl
@@ -432,3 +509,5 @@ src/untis/
   exporter.py       # JSON-Ausgabe
   summary.py        # --short Tagesansicht
 ```
+
+</details>
