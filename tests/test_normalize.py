@@ -1,13 +1,10 @@
 """Tests for the normalizer."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 
 import pytest
-from src.normalize import (  # noqa: E402
+from untis.normalize import (  # noqa: E402
     normalize_absence,
     normalize_exam,
     normalize_homework,
@@ -148,3 +145,57 @@ class TestOtherNormalizers:
         })
         assert m["subject"] == "Hi"
         assert m["read"] is False
+
+
+def _grid_entry(classes=(), teachers=(), type_="NORMAL_TEACHING_PERIOD",
+                status="CHANGED", info=None):
+    """classes/teachers: (short, removed?) tuples."""
+    def items(kind, elems):
+        return [
+            {"current": None, "removed": {"type": kind, "shortName": n, "status": "REMOVED"}}
+            if removed else
+            {"current": {"type": kind, "shortName": n, "status": "REGULAR"}, "removed": None}
+            for n, removed in elems
+        ]
+    return {"days": [{"date": "2026-09-30", "gridEntries": [{
+        "type": type_, "status": status, "lessonInfo": info,
+        "duration": {"start": "2026-09-30T13:25", "end": "2026-09-30T14:15"},
+        "position1": items("TEACHER", teachers),
+        "position2": [{"current": {"type": "SUBJECT", "shortName": "ETH"}}],
+        "position3": items("CLASS", classes),
+    }]}]}
+
+
+class TestRemovedAndEvents:
+    def _entry(self, grid, own=None):
+        return normalize_timetable_grid(grid, own)["days"][0]["entries"][0]
+
+    def test_own_class_removed(self):
+        grid = _grid_entry(classes=[("CLASS-B", False), ("CLASS-A", True)],
+                           teachers=[("TCH1", False)])
+        assert self._entry(grid, {"CLASS-A"})["is_removed"] is True
+
+    def test_other_class_removed_is_not_ours(self):
+        grid = _grid_entry(classes=[("CLASS-A", False), ("CLASS-B", True)],
+                           teachers=[("TCH1", False)])
+        assert self._entry(grid, {"CLASS-A"})["is_removed"] is False
+
+    def test_unknown_own_class_needs_all_removed(self):
+        partly = _grid_entry(classes=[("CLASS-B", False), ("CLASS-A", True)])
+        fully = _grid_entry(classes=[("CLASS-A", True)])
+        assert self._entry(partly)["is_removed"] is False
+        assert self._entry(fully)["is_removed"] is True
+
+    def test_no_teacher_left(self):
+        gone = _grid_entry(teachers=[("TCH1", True), ("TCH2", True)])
+        partly = _grid_entry(teachers=[("TCH1", True), ("TCH2", False)])
+        assert self._entry(gone)["no_teacher"] is True
+        assert self._entry(partly)["no_teacher"] is False
+        assert self._entry(_grid_entry())["no_teacher"] is False
+
+    def test_event(self):
+        e = self._entry(_grid_entry(type_="EVENT", info="EVENT-NAME",
+                                    teachers=[("TCH8", False), ("TCH9", False)]))
+        assert e["is_event"] is True
+        assert e["info"] == "EVENT-NAME"
+        assert [t["short"] for t in e["teachers"]] == ["TCH8", "TCH9"]

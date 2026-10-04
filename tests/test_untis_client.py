@@ -7,18 +7,14 @@ hard cases: WAF blocks, auth errors, success paths, error mapping.
 from __future__ import annotations
 
 import json
-import sys
 from datetime import date
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# Make src importable when running from the project root
-sys.path.insert(0, str(Path(__file__).parent))
 
-from src.untis_client import (  # noqa: E402
+from untis.untis_client import (  # noqa: E402
     AUTH_ERRORS,
     WebUntisClient,
     WebUntisError,
@@ -32,7 +28,7 @@ from src.untis_client import (  # noqa: E402
 # ----------------------------------------------------------------------
 @pytest.fixture
 def cfg() -> Any:
-    from src.config import ScraperConfig
+    from untis.config import ScraperConfig
     return ScraperConfig(
         server="htbla-wels",
         school="htbla-wels",
@@ -40,6 +36,7 @@ def cfg() -> Any:
         password="s3cret",
         headless=True,
         timeout_ms=10_000,
+        transport="browser",   # these tests drive a fake Playwright page
     )
 cfg_ = cfg  # alias for the parametrize trick below
 
@@ -67,7 +64,7 @@ def fake_page() -> MagicMock:
 
 @pytest.fixture
 def client(cfg: Any, fake_session: MagicMock, fake_page: MagicMock) -> WebUntisClient:
-    from src.browser import BrowserSession
+    from untis.browser import BrowserSession
     c = WebUntisClient(cfg, fake_session)
     # Inject a fake page as if login() had completed.
     c._page = fake_page
@@ -395,6 +392,25 @@ class TestDataFetchers:
         assert result[0]["text"] == "do math"
         assert result[0]["lesson"]["subject"] == "M"
         assert result[0]["teacher"]["name"] == "GRI"
+
+    async def test_own_classes_from_filter(
+        self, client: WebUntisClient, fake_page: MagicMock,
+    ):
+        client._token = "tok"
+        client._resource_type = "STUDENT"
+        fake_page.evaluate = AsyncMock(return_value={
+            "status": 200, "ok": True, "raw": "{}", "data": {"students": [
+                {"student": {"id": 999}, "classes": [{"class": {"shortName": "OTHER"}}]},
+                {"student": {"id": 12345}, "classes": [
+                    {"class": {"shortName": "CLASS-A"}, "dateRange": {}},
+                ]},
+            ]},
+        })
+        assert await client.get_own_classes() == {"CLASS-A"}
+
+    async def test_own_classes_empty_for_teachers(self, client: WebUntisClient):
+        client._resource_type = "TEACHER"
+        assert await client.get_own_classes() == set()
 
     async def test_refreshes_token_on_401(
         self, client: WebUntisClient, fake_page: MagicMock,

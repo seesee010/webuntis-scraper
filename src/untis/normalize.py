@@ -164,14 +164,23 @@ _GRID_TYPE_KEYS = {
 }
 
 
-def normalize_timetable_grid(grid: dict) -> dict[str, Any]:
-    """Convert REST v1 timetable/entries into a per-day structure."""
+def normalize_timetable_grid(
+    grid: dict, own_classes: Optional[set[str]] = None,
+) -> dict[str, Any]:
+    """Convert REST v1 timetable/entries into a per-day structure.
+
+    `own_classes` (short names of the user's classes) is needed to tell
+    "your class was removed from this lesson" apart from "some other
+    class was removed". Without it, an entry only counts as removed
+    when no class is left at all.
+    """
     days_out: list[dict] = []
     for day in grid.get("days") or []:
         entries_out = []
         for entry in day.get("gridEntries") or []:
             duration = entry.get("duration") or {}
             status = entry.get("status")
+            elements = _collect_elements(entry)
             entries_out.append({
                 "start": duration.get("start") or "",
                 "end": duration.get("end") or "",
@@ -184,7 +193,10 @@ def normalize_timetable_grid(grid: dict) -> dict[str, Any]:
                 "substitution_text": entry.get("substitutionText") or "",
                 "info": entry.get("lessonInfo") or "",   # e.g. event title
                 "notes": entry.get("notesAll") or "",
-                **_collect_elements(entry),
+                "is_event": entry.get("type") == "EVENT",
+                "is_removed": _own_class_removed(elements["classes"], own_classes),
+                "no_teacher": _no_teacher_left(elements["teachers"]),
+                **elements,
                 "raw": entry,
             })
         days_out.append({
@@ -193,6 +205,21 @@ def normalize_timetable_grid(grid: dict) -> dict[str, Any]:
             "entries": entries_out,
         })
     return {"days": days_out, "raw": grid}
+
+
+def _own_class_removed(classes: list[dict], own_classes: Optional[set[str]]) -> bool:
+    removed = {c.get("short") for c in classes if c.get("status") == "REMOVED"}
+    if not removed:
+        return False
+    if own_classes:
+        return bool(removed & own_classes)
+    # Unknown own class: only certain if no class is left at all.
+    return all(c.get("status") == "REMOVED" for c in classes)
+
+
+def _no_teacher_left(teachers: list[dict]) -> bool:
+    """Teachers were removed and nobody replaces them."""
+    return bool(teachers) and all(t.get("status") == "REMOVED" for t in teachers)
 
 
 def _collect_elements(entry: dict) -> dict[str, list[dict]]:

@@ -9,35 +9,64 @@ import json
 import logging
 import os
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from dotenv import dotenv_values
 
+from .privacy import ensure_private_dir, is_readable_by_others, make_private, tighten_dir
+
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+def _project_root(module_file: Path) -> Path | None:
+    """The repo checkout this module lives in (<root>/src/untis/config.py),
+    or None when installed as a package (pip/pipx), where the "project
+    folder" would be site-packages."""
+    root = Path(module_file).resolve().parents[2]
+    return root if (root / "pyproject.toml").exists() else None
 
 
 def _xdg_dir(var: str, fallback: str) -> Path:
     return Path(os.environ.get(var) or Path.home() / fallback) / "untis"
 
 
-# Installed use: config + .env in ~/.config/untis, sessions/out/logs in
-# ~/.local/share/untis. Without ~/.config/untis/config.json everything
-# stays in the project folder (dev checkout / Windows).
+def _pick_dirs(
+    xdg_config: Path, xdg_data: Path, project_root: Path | None,
+) -> tuple[Path, Path]:
+    """(config dir, data dir).
+
+    Normal use: config + .env in ~/.config/untis, sessions/out/logs in
+    ~/.local/share/untis. Only a dev checkout without
+    ~/.config/untis/config.json keeps everything in the project folder
+    (handy for development and on Windows).
+    """
+    if project_root is None or (xdg_config / "config.json").exists():
+        return xdg_config, xdg_data
+    return project_root, project_root
+
+
+PROJECT_ROOT = _project_root(Path(__file__))
 XDG_CONFIG_DIR = _xdg_dir("XDG_CONFIG_HOME", ".config")
 XDG_DATA_DIR = _xdg_dir("XDG_DATA_HOME", ".local/share")
-if (XDG_CONFIG_DIR / "config.json").exists():
-    CONFIG_DIR, DATA_DIR = XDG_CONFIG_DIR, XDG_DATA_DIR
-else:
-    CONFIG_DIR = DATA_DIR = PROJECT_ROOT
+CONFIG_DIR, DATA_DIR = _pick_dirs(XDG_CONFIG_DIR, XDG_DATA_DIR, PROJECT_ROOT)
 
 DEFAULT_CONFIG_PATH = CONFIG_DIR / "config.json"
 DEFAULT_ENV_PATH = CONFIG_DIR / ".env"
 SESSIONS_DIR = DATA_DIR / "sessions"
 OUT_DIR = DATA_DIR / "out"
 LOGS_DIR = DATA_DIR / "logs"
+CACHE_DIR = DATA_DIR / "cache"            # last fetched payload (--offline/--max-age)
+CACHE_PATH = CACHE_DIR / "last.json"
+STATE_DIR = DATA_DIR / "state"            # --changes snapshot
+CHANGES_PATH = STATE_DIR / "changes.json"
+
+
+TRANSPORTS = ("auto", "http", "browser")
+
+
+class ConfigError(ValueError):
+    """Raised when the configuration is missing or incomplete."""
 
 
 @dataclass
@@ -55,6 +84,18 @@ class ScraperConfig:
     # Date range for timetable scraping
     days_back: int = 0
     days_forward: int = 14
+    # Set by the CLI date shortcuts; override days_back/days_forward.
+    start_date: date | None = None
+    end_date: date | None = None
+    pick_day: str | None = None    # "tomorrow" | "next": first school day
+    # days_back/days_forward count school days; True = plain calendar days
+    calendar_days: bool = False
+    # --tests without a window: from today to the end of the school year
+    until_school_year_end: bool = False
+    # --homework without a window: the whole school year (from its start)
+    from_school_year_start: bool = False
+    # --homework: keep homework by due date (the API filters by lesson date)
+    homework_by_due_date: bool = False
 
     # Modules to enable
     scrape_timetable: bool = True
@@ -62,6 +103,14 @@ class ScraperConfig:
     scrape_homework: bool = True
     scrape_absences: bool = True
     scrape_messages: bool = True
+
+    # "auto": plain HTTP, browser only as fallback; "http"; "browser"
+    transport: str = "auto"
+    # Chromium's --no-sandbox etc. Only needed in some Docker/root setups;
+    # enabled automatically when running as root.
+    browser_no_sandbox: bool = False
+    # CLI arguments applied on every run (read by main.py before parsing).
+    default_args: Any = None
 
     # Browser behaviour
     headless: bool = True
@@ -125,6 +174,24 @@ def _load_json(path: Path) -> dict:
         return {}
 
 
+def _secure_data_dirs(cfg: ScraperConfig, env_path: Path) -> None:
+    """Sessions, output and logs hold personal data: owner-only dirs
+    (700) and files (600). Only our own sub-directories are touched, never
+    the project folder itself or a custom output_dir chosen by the user."""
+    for d in (SESSIONS_DIR, LOGS_DIR, CACHE_DIR, STATE_DIR):
+        ensure_private_dir(d)
+        tighten_dir(d)
+    out = Path(cfg.output_dir)
+    if out.resolve() == OUT_DIR.resolve():
+        ensure_private_dir(out)
+        tighten_dir(out)
+    else:
+        out.mkdir(parents=True, exist_ok=True)
+    make_private(Path(cfg.storage_state_path))
+    if is_readable_by_others(env_path):
+        log.warning("%s is readable by other users; run: chmod 600 %s", env_path, env_path)
+
+
 def load_config(
     config_path: Path | str = DEFAULT_CONFIG_PATH,
     env_path: Path | str = DEFAULT_ENV_PATH,
@@ -155,7 +222,8 @@ def load_config(
         if field_name in {
             "headless", "pretty_json", "include_raw",
             "scrape_timetable", "scrape_exams", "scrape_homework",
-            "scrape_absences", "scrape_messages",
+            "scrape_absences", "scrape_messages", "calendar_days",
+            "browser_no_sandbox",
         }:
             current = getattr(cfg, field_name, False)
             setattr(cfg, field_name, _coerce_bool(v, current))
@@ -174,15 +242,24 @@ def load_config(
 
     cfg.derived_urls()
 
+    for key in ("days_back", "days_forward"):
+        if getattr(cfg, key) < 0:
+            raise ConfigError(f"{key} must be 0 or more, not {getattr(cfg, key)}")
+
+    if cfg.transport not in TRANSPORTS:
+        raise ConfigError(
+            f"transport must be one of {', '.join(TRANSPORTS)}, not {cfg.transport!r}"
+        )
+
     # A relative output_dir ("out") means relative to the data dir, not
     # to wherever the command happens to be run from.
     if not Path(cfg.output_dir).is_absolute():
         cfg.output_dir = str(DATA_DIR / cfg.output_dir)
 
     if not cfg.server or not cfg.school:
-        raise ValueError(
-            "server and school must be set in config.json or .env. "
-            "See config.example.json."
+        raise ConfigError(
+            f"server and school must be set in {config_path} or {env_path} "
+            "(see config.example.json)"
         )
 
     if cfg.username and not cfg.password:
@@ -194,8 +271,7 @@ def load_config(
     elif cfg.password and not cfg.username:
         log.warning("Password is set but username is empty")
 
-    for d in (SESSIONS_DIR, OUT_DIR, LOGS_DIR):
-        d.mkdir(parents=True, exist_ok=True)
+    _secure_data_dirs(cfg, Path(env_path))
 
     pw_set = bool(cfg.password)
     log.info(

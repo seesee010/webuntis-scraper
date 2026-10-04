@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .privacy import write_private_text
+
 log = logging.getLogger(__name__)
 
 
@@ -34,11 +36,11 @@ def write_json(
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     target = out_path / f"untis_{ts}.json"
     cleaned = _maybe_strip_raw(payload, keep_raw)
-    with target.open("w", encoding="utf-8") as f:
-        if pretty:
-            json.dump(cleaned, f, ensure_ascii=False, indent=2)
-        else:
-            json.dump(cleaned, f, ensure_ascii=False, separators=(",", ":"))
+    if pretty:
+        text = json.dumps(cleaned, ensure_ascii=False, indent=2)
+    else:
+        text = json.dumps(cleaned, ensure_ascii=False, separators=(",", ":"))
+    write_private_text(target, text)       # name, absences, … -> mode 600
     log.info("Wrote %s (%.1f KB)", target, target.stat().st_size / 1024)
     return target
 
@@ -47,6 +49,5 @@ def write_latest(payload: dict[str, Any], out_dir: str, keep_raw: bool = False) 
     out_path = Path(out_dir) / "latest.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cleaned = _maybe_strip_raw(payload, keep_raw)
-    with out_path.open("w", encoding="utf-8") as f:
-        json.dump(cleaned, f, ensure_ascii=False, indent=2)
+    write_private_text(out_path, json.dumps(cleaned, ensure_ascii=False, indent=2))
     return out_path

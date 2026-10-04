@@ -1,0 +1,10 @@
+# Every 15 minutes from 06:00 to 18:00 on school days (Mon-Fri).
+[Unit]
+Description=untis: check for timetable changes every 15 minutes on school days
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 06..17:00/15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
