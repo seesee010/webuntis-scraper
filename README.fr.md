@@ -362,11 +362,30 @@ et les jours où tous les cours sont annulés sont sautés ; l'en-tête du jour 
 Sous les jours apparaissent les examens à venir, les devoirs non faits et une ligne avec
 les absences et les messages non lus. Les couleurs ne sont utilisées que dans un terminal ; `--color always` les force (par ex. pour `less -R`), `--color never` ou `NO_COLOR=1` les désactive.
 
-Deux autres vues compactes. `--oneline` affiche une ligne par jour, avec un élément par heure de la grille horaire de l'école (un cours double apparaît deux fois, une heure libre comme `-`, les groupes parallèles comme `NET/PROG`). `--table` affiche une grille avec les jours en colonnes et les heures en lignes, un tableau par semaine, adapté à la largeur du terminal, suivi des examens et devoirs comme avec `-s`. Les deux utilisent les mêmes couleurs ; sans couleurs, `*` indique un changement, `~X~` un cours annulé ou retiré et `!` un examen.
+Deux autres vues compactes. `--oneline` affiche une ligne par jour, avec un élément par heure de la grille horaire de l'école (un cours double apparaît deux fois, une heure libre comme `-`, les groupes parallèles comme `NET/PROG`). `--table` affiche une grille avec bordures, une colonne par jour et une ligne par heure (début et fin), un tableau par semaine, adapté à la largeur du terminal, suivi des examens et devoirs comme avec `-s`. Les cours identiques consécutifs (un cours double, ou la même matière dans la même salle) partagent une cellule, et après le dernier cours d'un jour sa colonne est entièrement ouverte (ni cases vides ni lignes). Chaque cellule est colorée en entier : annulé en rouge, examen en magenta, changements en vert et les cours où tu étais absent en gris. Pendant les cours, la colonne d'aujourd'hui montre où tu en es, comme la vue par jour : le cours en cours reçoit un `▶`, les heures passées sont grisées, et une ligne sous le tableau indique ce qui a lieu maintenant et combien de temps il reste (`▶ now 09:52 · MATH · 38 min left`) ou ce qui vient ensuite. Les deux utilisent les mêmes couleurs ; sans couleurs, `*` indique un changement, `~X~` un cours annulé ou retiré, `!` un examen et, dans le tableau, `[X]` un cours où tu étais absent.
 
 ```
 Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
 Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
+```
+
+```
+$ untis --table --from mon --to tue
+┌───────┬────────────┬────────────┐
+│ Time  │ Mon 05.10. │ Tue 06.10. │
+├───────┼────────────┼────────────┤
+│ 07:50 │ MATH       │ NET/PROG   │
+│ 08:40 │ R101       │ R201, R202 │
+├───────┤            ├────────────┤
+│ 08:45 │            │ ~GEO~      │
+│ 09:35 │            │ R101       │
+├───────┼────────────┼────────────┤
+│ 09:40 │            │ [MATH!]    │
+│ 10:30 │            │ R101       │
+├───────┼────────────┼────────────┘
+│ 10:45 │ ENG*       │
+│ 11:35 │ R101       │
+└───────┴────────────┘
 ```
 
 `--start`, `--end` et `--free` répondent à une question sur un jour et n'affichent que la réponse : `today` (par défaut), `tomorrow`, `next` (le prochain jour de cours), une date ou un jour de la semaine (le prochain). Les cours annulés et ceux dont ta classe a été retirée ne comptent pas ; un premier cours annulé décale donc `--start`. Les heures libres viennent de la grille horaire de l'école. S'il n'y a pas cours ce jour-là, `-` est affiché et le code de sortie est 5. `--format json` affiche `{"date", "start", "end", "first", "free"}`. Seul l'emploi du temps est chargé, et aucun fichier JSON n'est écrit.

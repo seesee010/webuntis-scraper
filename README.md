@@ -354,11 +354,30 @@ header then says `(next school day)`.
 Below the days come upcoming exams, open homework and a line with
 absences and unread messages. Colors are only used on a terminal; `--color always` forces them (e.g. for `less -R`), `--color never` or `NO_COLOR=1` turns them off.
 
-Two more compact layouts. `--oneline` prints one line per day, with one token per period of the school's time grid (a double lesson appears twice, a free period as `-`, parallel groups as `NET/PROG`). `--table` prints a grid with the days as columns and the periods as rows, one table per week, fitted to the terminal width, followed by the exams/homework part like `-s`. Both use the same colors; without colors, `*` marks a change, `~X~` a cancelled or removed lesson and `!` an exam.
+Two more compact layouts. `--oneline` prints one line per day, with one token per period of the school's time grid (a double lesson appears twice, a free period as `-`, parallel groups as `NET/PROG`). `--table` prints a bordered grid with one column per day and one row per period (start and end time), one table per week, fitted to the terminal width, followed by the exams/homework part like `-s`. Consecutive identical lessons (a double lesson, or the same subject in the same room) share one cell, and after a day's last lesson its column is fully open (no empty boxes and no lines). Each cell is colored as a whole: cancelled red, exam magenta, changes green, and lessons you were absent from gray. While school runs, today's column shows where you are, like the day view: the running lesson gets a `▶`, past periods are dimmed, and a line under the table says what runs now and how long it still takes (`▶ now 09:52 · MATH · 38 min left`) or what comes next. Both use the same colors; without colors, `*` marks a change, `~X~` a cancelled or removed lesson, `!` an exam and, in the table, `[X]` a lesson you were absent from.
 
 ```
 Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
 Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
+```
+
+```
+$ untis --table --from mon --to tue
+┌───────┬────────────┬────────────┐
+│ Time  │ Mon 05.10. │ Tue 06.10. │
+├───────┼────────────┼────────────┤
+│ 07:50 │ MATH       │ NET/PROG   │
+│ 08:40 │ R101       │ R201, R202 │
+├───────┤            ├────────────┤
+│ 08:45 │            │ ~GEO~      │
+│ 09:35 │            │ R101       │
+├───────┼────────────┼────────────┤
+│ 09:40 │            │ [MATH!]    │
+│ 10:30 │            │ R101       │
+├───────┼────────────┼────────────┘
+│ 10:45 │ ENG*       │
+│ 11:35 │ R101       │
+└───────┴────────────┘
 ```
 
 `--start`, `--end` and `--free` answer one question about a day and print only the answer: `today` (the default), `tomorrow`, `next` (the next school day), a date, or a weekday (the next one). Cancelled lessons and lessons your class was removed from don't count, so a cancelled first period moves `--start` later. Free periods come from the school's time grid. With no school that day they print `-` and exit with code 5. `--format json` prints `{"date", "start", "end", "first", "free"}`. Only the timetable is fetched, and no JSON files are written.

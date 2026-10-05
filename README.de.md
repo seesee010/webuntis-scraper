@@ -359,11 +359,30 @@ Tageskopf steht dann `(next school day)`.
 Unter den Tagen folgen Prüfungen, offene Hausaufgaben, Abwesenheiten und
 ungelesene Nachrichten. Farben gibt es nur im Terminal; `--color always` erzwingt sie (z.B. für `less -R`), `--color never` oder `NO_COLOR=1` schaltet sie ab.
 
-Zwei weitere kompakte Ansichten. `--oneline` zeigt eine Zeile pro Tag, mit einem Eintrag pro Stunde des Zeitrasters der Schule (eine Doppelstunde erscheint zweimal, eine Freistunde als `-`, parallele Gruppen als `NET/PROG`). `--table` zeigt ein Raster mit den Tagen als Spalten und den Stunden als Zeilen, eine Tabelle pro Woche, passend zur Terminalbreite, danach wie bei `-s` Prüfungen und Hausaufgaben. Beide verwenden dieselben Farben; ohne Farben markiert `*` eine Änderung, `~X~` eine entfallene oder ausgetragene Stunde und `!` eine Prüfung.
+Zwei weitere kompakte Ansichten. `--oneline` zeigt eine Zeile pro Tag, mit einem Eintrag pro Stunde des Zeitrasters der Schule (eine Doppelstunde erscheint zweimal, eine Freistunde als `-`, parallele Gruppen als `NET/PROG`). `--table` zeigt ein Raster mit Rahmen, einer Spalte pro Tag und einer Zeile pro Stunde (Beginn und Ende), eine Tabelle pro Woche, passend zur Terminalbreite, danach wie bei `-s` Prüfungen und Hausaufgaben. Aufeinanderfolgende gleiche Stunden (eine Doppelstunde oder dasselbe Fach im selben Raum) teilen sich eine Zelle, und nach der letzten Stunde eines Tages ist seine Spalte ganz offen (keine leeren Kästchen und keine Linien). Jede Zelle wird als Ganzes eingefärbt: entfallen rot, Prüfung magenta, Änderungen grün und Stunden, in denen du abwesend warst, grau. Solange Unterricht ist, zeigt die Spalte von heute wie die Tagesansicht, wo du gerade bist: Die laufende Stunde bekommt ein `▶`, vergangene Stunden werden abgedunkelt, und eine Zeile unter der Tabelle sagt, was gerade läuft und wie lange noch (`▶ now 09:52 · MATH · 38 min left`) oder was als Nächstes kommt. Beide verwenden dieselben Farben; ohne Farben markiert `*` eine Änderung, `~X~` eine entfallene oder ausgetragene Stunde, `!` eine Prüfung und in der Tabelle `[X]` eine Stunde, in der du abwesend warst.
 
 ```
 Mon 05.10.  07:50–13:25  MATH MATH GER - ENG* PROG
 Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
+```
+
+```
+$ untis --table --from mon --to tue
+┌───────┬────────────┬────────────┐
+│ Time  │ Mon 05.10. │ Tue 06.10. │
+├───────┼────────────┼────────────┤
+│ 07:50 │ MATH       │ NET/PROG   │
+│ 08:40 │ R101       │ R201, R202 │
+├───────┤            ├────────────┤
+│ 08:45 │            │ ~GEO~      │
+│ 09:35 │            │ R101       │
+├───────┼────────────┼────────────┤
+│ 09:40 │            │ [MATH!]    │
+│ 10:30 │            │ R101       │
+├───────┼────────────┼────────────┘
+│ 10:45 │ ENG*       │
+│ 11:35 │ R101       │
+└───────┴────────────┘
 ```
 
 `--start`, `--end` und `--free` beantworten eine Frage zu einem Tag und geben nur die Antwort aus: `today` (Standard), `tomorrow`, `next` (der nächste Schultag), ein Datum oder ein Wochentag (der nächste). Entfallene Stunden und Stunden, aus denen deine Klasse ausgetragen ist, zählen nicht; eine entfallene erste Stunde verschiebt `--start` also nach hinten. Freistunden kommen aus dem Zeitraster der Schule. Ist an dem Tag keine Schule, wird `-` ausgegeben und mit Code 5 beendet. `--format json` gibt `{"date", "start", "end", "first", "free"}` aus. Es wird nur der Stundenplan geladen, und es werden keine JSON-Dateien geschrieben.
