@@ -489,10 +489,29 @@ def _table_cell(rows: list[dict], st: _Style, absent: bool = False
     return ([_cell(rows, st), room_styled] if room_plain else [_cell(rows, st)]), key
 
 
-def _junction(left: bool, right: bool) -> str:
-    """The border char between two columns on a body line: a line runs
-    to the left and/or right of it (vertical borders always go on)."""
-    return {(True, True): "┼", (True, False): "┤", (False, True): "├"}.get((left, right), "│")
+# Box-drawing char by the lines that leave a crossing: (up, down, left, right).
+_BOX = {
+    (True, True, True, True): "┼", (True, True, True, False): "┤",
+    (True, True, False, True): "├", (True, True, False, False): "│",
+    (False, True, True, True): "┬", (True, False, True, True): "┴",
+    (False, False, True, True): "─", (False, True, False, True): "┌",
+    (False, True, True, False): "┐", (True, False, False, True): "└",
+    (True, False, True, False): "┘",
+    (True, False, False, False): "│", (False, True, False, False): "│",
+    (False, False, True, False): "─", (False, False, False, True): "─",
+}
+
+
+def _junction(up: bool, down: bool, left: bool, right: bool) -> str:
+    """The border char where lines leave a crossing in these directions
+    (" " if none does)."""
+    return _BOX.get((up, down, left, right), " ")
+
+
+# A body line of a table column is text, a horizontal line (_LINE) or
+# open space after the day's last lesson (_OPEN): no box there at all.
+_LINE: Optional[str] = None
+_OPEN = "\0open"
 
 
 def _column_widths(heads: list[str], cells: list[list[tuple[list[str], Any]]],
@@ -512,32 +531,40 @@ def _column_widths(heads: list[str], cells: list[list[tuple[list[str], Any]]],
 def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
                 cells: list[list[tuple[list[str], Any]]], width: int) -> list[str]:
     """The bordered grid: a time column (start / end) and one column per
-    day; `cells[c][i]` is (lines, key) of day c in period i. A body
-    line holds text per column, or None where a horizontal line runs.
-    After a day's last lesson its column stays open down to the bottom
-    border (no empty boxes)."""
+    day; `cells[c][i]` is (lines, key) of day c in period i. After a
+    day's last lesson its column is open: no boxes, and no border on
+    sides where an open column (or the table's edge) is next to it."""
     widths = [_TIME_W] + _column_widths(heads, cells, width)
     n = len(units)
     cols: list[list[Optional[str]]] = [[]]
     for i, (start, end) in enumerate(units):
-        cols[0] += [start, st.dim(end)] + ([None] if i < n - 1 else [])
+        cols[0] += [start, st.dim(end)] + ([_LINE] if i < n - 1 else [])
     for col in cells:
         lines: list[Optional[str]] = []
         last = max((i for i, (_, key) in enumerate(col) if key is not None), default=-1)
         i = 0
         while i < n:
             content, key = col[i]
+            if key is None and i > last:        # nothing comes anymore
+                lines += [_OPEN] * ((n - 1 - i) * 3 + 2)
+                break
             j = i
-            if key is None and i > last:
-                j = n - 1                       # nothing comes anymore: no more boxes
             while key is not None and j + 1 < n and col[j + 1][1] == key:
                 j += 1                          # merge equal neighbours
             height = (j - i) * 3 + 2
             lines += (content + [""] * height)[:height]
             if j < n - 1:
-                lines.append(None)
+                lines.append(_LINE)
             i = j + 1
         cols.append(lines)
+    height = len(cols[0])
+
+    def state(k: int, y: int) -> Optional[str]:
+        return cols[k][y] if 0 <= k < len(cols) else _OPEN    # outside the table: open
+
+    def vertical(k: int, y: int) -> bool:
+        """A border left of column k on text line y: unless both sides are open."""
+        return state(k - 1, y) is not _OPEN or state(k, y) is not _OPEN
 
     def rule(left: str, mid: str, right: str) -> str:
         return left + mid.join("─" * (w + 2) for w in widths) + right
@@ -545,18 +572,28 @@ def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
     out = [rule("┌", "┬", "┐"),
            "│" + "│".join(f" {_fit(h, w)} " for h, w in
                          zip([st.bold("Time")] + [st.bold(h) for h in heads], widths)) + "│",
-           rule("├", "┼", "┤")]
-    for y in range(len(cols[0])):
+           "".join(_junction(True, vertical(k, 0), k > 0, k < len(cols))
+                   + ("─" * (widths[k] + 2) if k < len(cols) else "")
+                   for k in range(len(cols) + 1))]
+    for y in range(height):
         line = ""
         for k in range(len(cols) + 1):
-            left = k > 0 and cols[k - 1][y] is None
-            right = k < len(cols) and cols[k][y] is None
-            line += _junction(left, right)
+            left, right = state(k - 1, y) is _LINE, state(k, y) is _LINE
+            if left or right:
+                line += _junction(vertical(k, y - 1), vertical(k, y + 1), left, right)
+            else:
+                line += "│" if vertical(k, y) else " "
             if k < len(cols):
-                text = cols[k][y]
-                line += "─" * (widths[k] + 2) if text is None else f" {_fit(text, widths[k])} "
-        out.append(line)
-    out.append(rule("└", "┴", "┘"))
+                text = state(k, y)
+                line += ("─" * (widths[k] + 2) if text is _LINE else
+                         " " * (widths[k] + 2) if text is _OPEN else f" {_fit(text, widths[k])} ")
+        out.append(line.rstrip())
+    closed = [state(k, height - 1) is not _OPEN for k in range(len(cols))]
+    out.append("".join(
+        _junction(vertical(k, height - 1), False, k > 0 and closed[k - 1],
+                  k < len(cols) and closed[k])
+        + (("─" if closed[k] else " ") * (widths[k] + 2) if k < len(cols) else "")
+        for k in range(len(cols) + 1)).rstrip())
     return out
 
 

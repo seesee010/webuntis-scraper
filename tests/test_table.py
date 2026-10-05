@@ -148,11 +148,17 @@ def test_table_cell_keys_differ_by_state():
 
 
 # --- _junction --------------------------------------------------------------
-@pytest.mark.parametrize("left, right, char", [
-    (True, True, "┼"), (True, False, "┤"), (False, True, "├"), (False, False, "│"),
+@pytest.mark.parametrize("up, down, left, right, char", [
+    (True, True, True, True, "┼"), (True, True, True, False, "┤"),
+    (True, True, False, True, "├"), (True, True, False, False, "│"),
+    (False, True, True, True, "┬"), (True, False, True, True, "┴"),
+    (False, False, True, True, "─"), (False, True, False, True, "┌"),
+    (False, True, True, False, "┐"), (True, False, False, True, "└"),
+    (True, False, True, False, "┘"), (True, False, False, False, "│"),
+    (False, False, True, False, "─"), (False, False, False, False, " "),
 ])
-def test_junction(left, right, char):
-    assert _junction(left, right) == char
+def test_junction(up, down, left, right, char):
+    assert _junction(up, down, left, right) == char
 
 
 # --- _column_widths ---------------------------------------------------------
@@ -227,13 +233,35 @@ def test_draw_table_no_boxes_after_the_last_lesson():
     assert out[5] == "├───────┼────────┼────────┤"            # closes the last lesson's box
     assert out[8] == "├───────┤        ├────────┤"            # then the column stays open
     assert out[9] == "│ 09:40 │        │ D      │"
-    assert out[-1] == "└───────┴────────┴────────┘"           # the bottom border closes it
+    assert out[-1] == "└───────┘        └────────┘"           # no bottom border under it
 
 
 def test_draw_table_day_without_lessons_is_one_open_column():
     cells = [[([], None), ([], None)], [(["A"], "a"), (["B"], "b")]]
     out = _draw_table(OFF, UNITS[:2], ["Mon", "Tue"], cells, 80)
+    assert out[2] == "├───────┼────────┼────────┤"            # the header box still closes
     assert out[5] == "├───────┤        ├────────┤"
+    assert out[-1] == "└───────┘        └────────┘"
+
+
+def test_draw_table_open_columns_have_no_line_between_or_at_the_edge():
+    cells = [[(["A"], "a"), ([], None), ([], None)],
+             [(["B"], "b"), ([], None), ([], None)],
+             [(["C"], "c"), (["D"], "d"), ([], None)]]
+    out = _draw_table(OFF, UNITS, ["Mon", "Tue", "Wed"], cells, 80)
+    assert out[5] == "├───────┼────────┴────────┼────────┤"     # both close, open below
+    assert out[6] == "│ 08:45 │                 │ D      │"     # no line between Mon and Tue
+    assert out[8] == "├───────┤                 └────────┘"     # Wed's box closes, no right edge
+    assert out[9] == "│ 09:40 │"                               # nothing to the right anymore
+    assert out[-1] == "└───────┘"
+
+
+def test_draw_table_last_column_closes_with_a_corner():
+    cells = [[(["A"], "a"), (["B"], "b")], [(["C"], "c"), ([], None)]]
+    out = _draw_table(OFF, UNITS[:2], ["Mon", "Tue"], cells, 80)
+    assert out[5] == "├───────┼────────┼────────┘"
+    assert out[6] == "│ 08:45 │ B      │"
+    assert out[-1] == "└───────┴────────┘"
 
 
 def test_render_table_short_day_ends_open():
@@ -275,8 +303,9 @@ def test_render_table_week():
     assert out[5] == "├───────┤            ├────────────┤"         # double lesson merged
     assert out[6] == "│ 08:45 │            │ ~GEO~      │"
     assert out[9] == "│ 09:40 │            │ [MATH!]    │"         # absent + exam
-    assert out[12] == "│ 10:45 │ ENG*       │            │"
-    assert out[-1].startswith("└")
+    assert out[11] == "├───────┼────────────┼────────────┘"     # Tue is over
+    assert out[12] == "│ 10:45 │ ENG*       │"
+    assert out[-1] == "└───────┴────────────┘"
 
 
 def test_render_table_single_day():
