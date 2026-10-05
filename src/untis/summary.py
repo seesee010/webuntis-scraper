@@ -37,6 +37,7 @@ ROLE_STYLES: dict[str, str] = {
     "event": "1;34",           # bold blue
     "added": "1;32",           # the substitute teacher / new room itself
     "gone": "31;9",            # a removed teacher / room
+    "absent": "2",             # gray: you were absent (--table)
 }
 
 
@@ -377,7 +378,7 @@ def _token(r: dict, st: _Style) -> str:
     return name
 
 
-def _cell(rows: list[dict], st: _Style, with_room: bool = False) -> str:
+def _cell(rows: list[dict], st: _Style) -> str:
     """All lessons of one period, parallel ones joined with "/"."""
     parts, seen = [], set()
     for r in rows:
@@ -385,10 +386,7 @@ def _cell(rows: list[dict], st: _Style, with_room: bool = False) -> str:
         if key in seen:
             continue
         seen.add(key)
-        text = _token(r, st)
-        if with_room and len(rows) == 1 and r["rooms"]:
-            text += " " + _rooms(r["rooms"], st)[1]
-        parts.append(text)
+        parts.append(_token(r, st))
     return "/".join(parts)
 
 
@@ -420,14 +418,156 @@ def _render_oneline(timetable: dict, st: _Style, window: dict | None = None) -> 
     return out
 
 
+# --- --table (#69): a bordered week grid -------------------------------------
+_TIME_W = 5                     # "07:50"
+_MIN_COL, _MAX_COL = 6, 24      # width of a day column (without padding)
+# Roles that color a whole table cell, most important first.
+_CHANGE_ROLES = ("changed", "substitution", "extra", "no teacher")
+
+
+def _absent_spans(absences: dict | None) -> dict[str, list[tuple[str, str]]]:
+    """Day -> [(from, to)] of the absences section, to gray out the
+    periods you missed; {} without absences."""
+    from .absences import absence_days        # absences imports this module
+    out: dict[str, list[tuple[str, str]]] = {}
+    for item in (absences or {}).get("items") or []:
+        for day, frm, to in absence_days(item):
+            out.setdefault(day.isoformat(), []).append((frm, to))
+    return out
+
+
+def _is_absent(spans: list[tuple[str, str]], start: str, end: str) -> bool:
+    """Does any absence overlap the period start..end ("HH:MM")?"""
+    return any(frm < end and to > start for frm, to in spans)
+
+
+def _block_role(rows: list[dict], absent: bool = False) -> str:
+    """The one state that colors a whole table cell: cancelled/removed
+    if no lesson of the period takes place, then absent, exam, event,
+    changed; "" for a regular lesson (and for an empty period)."""
+    if not rows:
+        return ""
+    labels = [_label(r) for r in rows]
+    if all(l in ("cancelled", "removed") for l in labels):
+        return "cancelled" if "cancelled" in labels else "removed"
+    if absent:
+        return "absent"
+    for role in ("exam", "event") + _CHANGE_ROLES:
+        if role in labels:
+            return role
+    return ""
+
+
+def _table_cell(rows: list[dict], st: _Style, absent: bool = False
+                ) -> tuple[list[str], Optional[tuple]]:
+    """(lines, key) of one period: the lessons (as in --oneline) and
+    their rooms. A cell with a role is colored as a whole; without
+    colors the markers stay (~X~, X!, X*) and [X] means absent. Equal
+    keys of neighbouring periods are merged into one cell; an empty
+    period has the key None."""
+    if not rows:
+        return [], None
+    role = _block_role(rows, absent)
+    lesson = _plain(_cell(rows, st))         # with colors: no ~X~ (struck through instead)
+    seen, rooms = set(), []
+    for r in rows:
+        for room in r["rooms"]:
+            if room.get("short") not in seen:
+                seen.add(room.get("short"))
+                rooms.append(room)
+    room_plain, room_styled = _rooms(rooms, st)
+    key = (lesson, room_plain, role)
+    if not st.enabled:
+        if absent:
+            lesson = f"[{lesson}]"
+        return [lesson, room_plain] if room_plain else [lesson], key
+    if role:
+        lines = [st.role(role, lesson)]
+        if room_plain:
+            lines.append(st.role(role, _plain(room_styled)))
+        return lines, key
+    return ([_cell(rows, st), room_styled] if room_plain else [_cell(rows, st)]), key
+
+
+def _junction(left: bool, right: bool) -> str:
+    """The border char between two columns on a body line: a line runs
+    to the left and/or right of it (vertical borders always go on)."""
+    return {(True, True): "┼", (True, False): "┤", (False, True): "├"}.get((left, right), "│")
+
+
+def _column_widths(heads: list[str], cells: list[list[tuple[list[str], Any]]],
+                   width: int) -> list[int]:
+    """Width of every day column: its widest content within
+    _MIN_COL.._MAX_COL, shrunk evenly to fit the terminal width."""
+    need = [max([len(_plain(h))] + [len(_plain(l)) for lines, _ in col for l in lines])
+            for h, col in zip(heads, cells)]
+    need = [min(max(w, _MIN_COL), _MAX_COL) for w in need]
+    fixed = _TIME_W + 4                         # "│ 07:50 " + the last "│"
+    if fixed + sum(w + 3 for w in need) > width:
+        budget = max((width - fixed) // max(len(need), 1) - 3, _MIN_COL)
+        need = [min(w, budget) for w in need]
+    return need
+
+
+def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
+                cells: list[list[tuple[list[str], Any]]], width: int) -> list[str]:
+    """The bordered grid: a time column (start / end) and one column per
+    day; `cells[c][i]` is (lines, key) of day c in period i. A body
+    line holds text per column, or None where a horizontal line runs."""
+    widths = [_TIME_W] + _column_widths(heads, cells, width)
+    n = len(units)
+    cols: list[list[Optional[str]]] = [[]]
+    for i, (start, end) in enumerate(units):
+        cols[0] += [start, st.dim(end)] + ([None] if i < n - 1 else [])
+    for col in cells:
+        lines: list[Optional[str]] = []
+        i = 0
+        while i < n:
+            content, key = col[i]
+            j = i
+            while key is not None and j + 1 < n and col[j + 1][1] == key:
+                j += 1                          # merge equal neighbours
+            height = (j - i) * 3 + 2
+            lines += (content + [""] * height)[:height]
+            if j < n - 1:
+                lines.append(None)
+            i = j + 1
+        cols.append(lines)
+
+    def rule(left: str, mid: str, right: str) -> str:
+        return left + mid.join("─" * (w + 2) for w in widths) + right
+
+    out = [rule("┌", "┬", "┐"),
+           "│" + "│".join(f" {_fit(h, w)} " for h, w in
+                         zip([st.bold("Time")] + [st.bold(h) for h in heads], widths)) + "│",
+           rule("├", "┼", "┤")]
+    for y in range(len(cols[0])):
+        line = ""
+        for k in range(len(cols) + 1):
+            left = k > 0 and cols[k - 1][y] is None
+            right = k < len(cols) and cols[k][y] is None
+            line += _junction(left, right)
+            if k < len(cols):
+                text = cols[k][y]
+                line += "─" * (widths[k] + 2) if text is None else f" {_fit(text, widths[k])} "
+        out.append(line)
+    out.append(rule("└", "┴", "┘"))
+    return out
+
+
 def _render_table(
     timetable: dict, st: _Style, window: dict | None = None, width: int | None = None,
+    absences: dict | None = None,
 ) -> list[str]:
+    """--table: one bordered grid per week, periods as rows (start and
+    end time), days as columns. Equal neighbouring lessons share a cell;
+    periods you were absent in are grayed out."""
     days = _days_rows(timetable)
     if not days:
         return ["", st.dim("  No lessons in this window.")]
     width = width or shutil.get_terminal_size((100, 24)).columns
     units = _grid_units(timetable, days)
+    absent = _absent_spans(absences)
     weeks: dict[tuple[int, int], list[str]] = {}
     for day_iso in sorted(days):
         weeks.setdefault(date.fromisoformat(day_iso).isocalendar()[:2], []).append(day_iso)
@@ -437,13 +577,13 @@ def _render_table(
         used = [i for i in range(len(units)) if any(slots[d][i] for d in week_days)]
         if not used:
             continue
-        col_w = max(10, min(20, (width - 8) // len(week_days) - 2))
+        rows = range(used[0], used[-1] + 1)
+        cells = [[_table_cell(slots[d][i], st,
+                              bool(slots[d][i]) and _is_absent(absent.get(d, []), *units[i]))
+                  for i in rows] for d in week_days]
         out.append("")
-        out.append((" " * 7 + "  ".join(_fit(st.bold(_fmt_day(d)), col_w)
-                                       for d in week_days)).rstrip())
-        for i in range(used[0], used[-1] + 1):
-            cells = [_fit(_cell(slots[d][i], st, with_room=True), col_w) for d in week_days]
-            out.append(f"{units[i][0]:<7}" + "  ".join(cells).rstrip())
+        out += _draw_table(st, [units[i] for i in rows], [_fmt_day(d) for d in week_days],
+                           cells, width)
     return out
 
 
@@ -529,7 +669,7 @@ def render_summary(
             lines += ["", st.red(f"{name}: {section['error']}")]
             continue
         if name == "timetable" and layout == "table":
-            lines += _render_table(section, st, window, width)
+            lines += _render_table(section, st, window, width, payload.get("absences"))
         elif name == "timetable":
             lines += _render_timetable(section, st, window, now)
         else:
@@ -576,6 +716,8 @@ def render_legend(color: Optional[bool] = None) -> str:
                  + st.role("event", "event"))
     lines.append(f"  {'now':<11} " + st.bold(st.yellow("▶")) + " the running lesson, "
                  + st.dim("dimmed") + " = already over")
+    lines.append(f"  {'absent':<11} " + (st.role("absent", "MATH") if st.enabled else "[MATH]")
+                 + " in --table: a lesson you were absent from")
     return "\n".join(lines)
 
 

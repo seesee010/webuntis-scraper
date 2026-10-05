@@ -16,7 +16,6 @@ from untis.summary import (
     _grid_units,
     _plain,
     _render_oneline,
-    _render_table,
     _slots,
     _Style,
     _token,
@@ -128,8 +127,7 @@ def test_token_event():
 def test_cell_parallel_rooms_and_dedupe():
     rows = _days_rows(TT)[TUE]
     assert _cell(rows[:2], OFF) == "NET/PROG"
-    assert _cell(rows[:2], OFF, with_room=True) == "NET/PROG"         # no room for groups
-    assert _cell([rows[3]], OFF, with_room=True) == "MATH! R101"
+    assert _cell([rows[3]], OFF) == "MATH!"
     assert _cell([rows[0], rows[0]], OFF) == "NET"
 
 
@@ -170,38 +168,7 @@ def test_render_summary_oneline_has_no_extra_sections():
     assert err == "timetable: HTTP 500"
 
 
-# --- --table ---------------------------------------------------------------
-def test_table():
-    lines = [l for l in _render_table(TT, OFF, width=60) if l]
-    assert lines[0].split() == ["Mon", "05.10.", "Tue", "06.10."]
-    assert lines[1].startswith("07:50  MATH R101") and "NET/PROG" in lines[1]
-    assert lines[2].startswith("08:45  MATH R101") and "~GEO~ R101" in lines[2]
-    assert lines[3].startswith("09:40") and "MATH! R101" in lines[3]       # free on Mon
-    assert lines[4].startswith("10:45  ENG* R101")
-    assert all(l == l.rstrip() for l in lines)
-
-
-def test_table_columns_are_aligned_and_fit_the_width():
-    lines = [l for l in _render_table(TT, ON, width=40) if l]
-    plains = [_plain(l) for l in lines]
-    assert all(len(p) <= 40 for p in plains)
-    tue_col = plains[0].index("Tue")
-    assert plains[1][tue_col:].startswith("NET/PROG")
-
-
-def test_table_splits_weeks():
-    tt = {"time_grid": GRID, "days": [
-        {"date": MON, "entries": [_e(MON, "07:50", "08:40", "A")]},
-        {"date": "2026-10-12", "entries": [_e("2026-10-12", "07:50", "08:40", "B")]}]}
-    lines = _render_table(tt, OFF, width=80)
-    headers = [l for l in lines if l.strip().startswith("Mon")]
-    assert len(headers) == 2
-
-
-def test_table_empty():
-    assert "No lessons" in _render_table({"days": []}, OFF)[1]
-
-
+# --- --table (details in test_table.py) -------------------------------------
 def test_render_summary_table_keeps_other_sections():
     out = render_summary({"meta": {"user": "Max"}, "timetable": TT,
                           "messages": {"items": [{"read": False}]}},
