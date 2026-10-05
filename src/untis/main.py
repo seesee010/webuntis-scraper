@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
+import io
 import json
 import logging
 import os
@@ -13,7 +15,7 @@ from pathlib import Path
 
 import httpx
 
-from . import __version__, cache, changes, dayinfo, setup_wizard
+from . import __version__, cache, changes, dayinfo, live, setup_wizard
 from . import now as now_mod
 from .browser import BrowserSession
 from .config import (
@@ -59,7 +61,7 @@ WINDOW_DESTS = ("today", "tomorrow", "next", "week", "next_week", "date",
                 "now")
 # These make no sense as defaults (they decide where defaults come from,
 # or print something and exit).
-NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version")
+NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version", "--live")
 
 
 class DefaultArgsError(Exception):
@@ -204,6 +206,14 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         help="With --changes: also send each change as a desktop notification.",
     )
     ap.add_argument(
+        "--live", nargs="?", const=live.DEFAULT_INTERVAL, type=_live_interval_arg,
+        **dflt(None), metavar="INTERVAL",
+        help=f"Keep running and redraw the output every INTERVAL (default "
+             f"{live.DEFAULT_INTERVAL}, at least {live.MIN_INTERVAL}s) until Ctrl-C. "
+             f"Without a view option it shows the -s overview; with --format "
+             f"json/waybar one line is printed per refresh.",
+    )
+    ap.add_argument(
         "--idle-empty", action=argparse.BooleanOptionalAction, **dflt(False),
         help="With --now: print nothing (Waybar: empty text) when no lesson is "
              "running, so a status bar module hides.",
@@ -337,6 +347,11 @@ def _parse_args(
                  "--homework, --oneline or --table")
     if args.notify and not args.changes:
         ap.error("--notify only works with --changes")
+    if args.live is not None and args.changes:
+        ap.error("--live can't be combined with --changes (use the systemd timer instead)")
+    if args.live is not None and not (_layout(args) or args.query or args.now
+                                      or args.tests or args.homework):
+        args.short = True                # otherwise there would be nothing to redraw
     args.window = None
     if from_to:
         try:
@@ -368,6 +383,13 @@ def _non_negative_int(text: str) -> int:
 def _duration_arg(text: str) -> int:
     try:
         return cache.parse_duration(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def _live_interval_arg(text: str) -> int:
+    try:
+        return live.parse_interval(text)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(str(exc)) from None
 
@@ -557,6 +579,52 @@ async def _answer_changes(cfg, args: argparse.Namespace, today: date, now: datet
     return EXIT_CHANGES
 
 
+# Errors that won't go away by retrying: stop --live instead of looping
+# (repeated failed logins could also lock the account).
+LIVE_FATAL = (EXIT_CONFIG, EXIT_LOGIN)
+
+
+async def _live_loop(args: argparse.Namespace, out=None, now=datetime.now,
+                     sleep=asyncio.sleep, rounds: int | None = None) -> int:
+    """--live: rerun the normal output every args.live seconds. A failed
+    refresh keeps the last output and shows the error; config and login
+    errors end the loop. `out`/`now`/`sleep`/`rounds` are set in tests."""
+    out = out or sys.stdout
+    machine = args.format in ("json", "waybar")
+    clear = not machine and out.isatty()
+    # Each refresh is printed into a buffer, so "--color auto" must be
+    # decided here, against the real output.
+    args.color = live.color_mode(args.color, out.isatty(), os.environ)
+    body, updated, done = "", None, 0
+    while True:
+        buf, error = io.StringIO(), None
+        try:
+            with contextlib.redirect_stdout(buf):
+                await _async_main(args)
+            body, updated = buf.getvalue(), now()
+        except Exception as exc:
+            if args.verbose:
+                logging.exception("Refresh failed")
+            code, error = _describe_error(exc, args)
+            if code in LIVE_FATAL:
+                print(f"untis: {error}", file=sys.stderr)
+                return code
+        # Only the first round may force a new login/session.
+        args.clear_session = args.form_login = False
+        if machine:
+            if error:
+                print(f"untis: {error}", file=sys.stderr)
+            else:
+                out.write(body if body.endswith("\n") else body + "\n")
+        else:
+            out.write(live.frame(body, live.footer(updated, args.live, now(), error), clear))
+        out.flush()
+        done += 1
+        if rounds is not None and done >= rounds:
+            return 0
+        await sleep(args.live)
+
+
 async def _fetch(cfg, args: argparse.Namespace) -> dict:
     async with BrowserSession(cfg, fresh=args.clear_session) as session:
         client = WebUntisClient(cfg, session)
@@ -617,7 +685,7 @@ def main() -> int:
         return 0
     _setup_logging(args.verbose,
                    quiet=bool(_layout(args) or args.query or args.tests or args.homework
-                              or args.now or args.changes))
+                              or args.now or args.changes or args.live is not None))
     if args.default_args:
         logging.getLogger(__name__).debug(
             "default_args from %s: %s", args.defaults_source, " ".join(args.default_args))
@@ -625,8 +693,12 @@ def main() -> int:
         "effective arguments: %s",
         {k: v for k, v in sorted(vars(args).items()) if v not in (None, False, [])})
     try:
+        if args.live is not None:
+            return asyncio.run(_live_loop(args))
         return asyncio.run(_async_main(args))
     except KeyboardInterrupt:
+        if args.live is not None:
+            return 0                     # Ctrl-C is how --live is meant to end
         print("\nAborted by user", file=sys.stderr)
         return EXIT_ABORTED
     except Exception as exc:

@@ -40,6 +40,7 @@ untis --short --next
 - **缺勤记录**和未读**消息**
 - `--now` 用来回答“我现在在上什么课”，还自带一个 [Waybar](https://github.com/Alexays/Waybar) 模块
 - `--changes --notify`，一旦有变化（代课、取消、新作业……）就发桌面通知
+- `--live` 让任意视图保持打开，并每隔几分钟自动刷新
 - 每次运行都有结构化的 **JSON** 输出，方便接到别的地方处理
 
 <details>
@@ -312,6 +313,8 @@ untis --now                      # 当前的课和下一节课
 untis --now --format waybar      # 用于 Waybar 自定义模块的 JSON
 untis --changes                  # 自上次 --changes 运行以来的变化
 untis --changes --notify         # ……并作为桌面通知发送
+untis --live                     # 保持 -s 视图打开，每 5 分钟重绘一次
+untis --now --live 1m --max-age 10m   # 当前课程，每分钟从缓存刷新
 ```
 
 `--from` / `--to` 支持 `--date` 的所有格式，另外还支持 `today`、`tomorrow` 以及英文或德文的星期名称（`mon`、`monday`、`mo`、`montag` 等）。星期名称指本周的那一天；如果这样 `--to` 会早于 `--from`，则指下周的那一天。
@@ -369,6 +372,8 @@ cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now untis-changes.timer
 ```
+
+`--live [INTERVAL]` 让 `untis` 持续运行，每隔 INTERVAL 重绘一次输出（默认 `5m`，至少 `60s`；格式与 `--max-age` 相同），直到按下 Ctrl-C。它适用于所有视图：`-s`（未选择视图时的默认值）、`--oneline`、`--table`、`--tests`、`--homework`、`--now` 以及 `--start`/`--end`/`--free`。底部一行显示上次更新时间和下次刷新时间。如果某次刷新失败（例如没有网络），上一次的输出会保留，错误显示在下方；配置错误和登录错误会结束循环。使用 `--format json`/`waybar` 时，每次刷新改为输出一行，没有 `interval` 的 Waybar 模块可以持续读取。与 `--max-age` 一起使用时，只有缓存过旧才会访问 WebUntis。`--live` 不能与 `--changes` 组合（请使用 systemd 定时器），也不能放进 `default_args`。
 
 输出保存在数据目录（`~/.local/share/untis/` 或项目文件夹）中的 `out/untis_<timestamp>.json` 和
 `out/latest.json`。Cookie 保存在那里的 `sessions/storage_state.json` 中，这样以后运行时不需要

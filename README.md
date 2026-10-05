@@ -38,6 +38,7 @@ the config files. No manual editing of JSON required. See [Installation](#instal
 - **Absences** and unread **messages**
 - `--now` for "what lesson am I in right now", including a ready-made [Waybar](https://github.com/Alexays/Waybar) module
 - `--changes --notify` for desktop notifications whenever something changes (substitutions, cancellations, new homework, …)
+- `--live` keeps any view open and redraws it every few minutes
 - Structured **JSON** output for every run, if you want to pipe it somewhere else
 
 <details>
@@ -320,6 +321,8 @@ untis --now                      # the current and the next lesson
 untis --now --format waybar      # JSON for a Waybar custom module
 untis --changes                  # what changed since the last --changes run
 untis --changes --notify         # … and as desktop notifications
+untis --live                     # keep the -s view open, redraw every 5 minutes
+untis --now --live 1m --max-age 10m   # current lesson, refreshed every minute from the cache
 ```
 
 `--from` / `--to` accept everything `--date` does, plus `today`, `tomorrow` and weekday names in English or German (`mon`, `monday`, `mo`, `montag`, …). A weekday means this week's; if `--to` would end up before `--from`, it means next week's.
@@ -379,6 +382,8 @@ cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now untis-changes.timer
 ```
+
+`--live [INTERVAL]` keeps `untis` running and redraws the output every INTERVAL (default `5m`, at least `60s`; same format as `--max-age`) until you press Ctrl-C. It works with every view: `-s` (the default if you pick none), `--oneline`, `--table`, `--tests`, `--homework`, `--now` and `--start`/`--end`/`--free`. A footer shows when it was last updated and when the next refresh comes. If a refresh fails (e.g. no network), the last output stays on screen with the error under it; config and login errors stop the loop. With `--format json`/`waybar` it prints one line per refresh instead, which a Waybar module without `interval` can read continuously. Combine it with `--max-age` to only hit WebUntis when the cache is too old. `--live` can't be combined with `--changes` (use the systemd timer) and can't be put in `default_args`.
 
 Output goes to `out/untis_<timestamp>.json` and `out/latest.json`
 inside the data directory (`~/.local/share/untis/`, or the project

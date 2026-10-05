@@ -38,6 +38,7 @@ die Config-Dateien. Kein händisches Bearbeiten von JSON nötig. Details dazu in
 - **Abwesenheiten** und ungelesene **Nachrichten**
 - `--now` für „welche Stunde habe ich gerade“, inklusive fertigem [Waybar](https://github.com/Alexays/Waybar)-Modul
 - `--changes --notify` für Desktop-Benachrichtigungen, sobald sich etwas ändert (Supplierung, Entfall, neue Hausaufgabe, …)
+- `--live` hält jede Ansicht offen und aktualisiert sie alle paar Minuten
 - Strukturierte **JSON**-Ausgabe bei jedem Lauf, falls du sie weiterverarbeiten willst
 
 <details>
@@ -325,6 +326,8 @@ untis --now                      # die aktuelle und die nächste Stunde
 untis --now --format waybar      # JSON für ein Waybar-Custom-Modul
 untis --changes                  # was sich seit dem letzten --changes-Lauf geändert hat
 untis --changes --notify         # … und als Desktop-Benachrichtigungen
+untis --live                     # die -s-Ansicht offen lassen, alle 5 Minuten neu zeichnen
+untis --now --live 1m --max-age 10m   # aktuelle Stunde, jede Minute aus dem Cache aktualisiert
 ```
 
 `--from` / `--to` verstehen alles, was `--date` versteht, dazu `today`/`heute`, `tomorrow`/`morgen` und Wochentage auf Englisch oder Deutsch (`mon`, `monday`, `mo`, `montag`, …). Ein Wochentag meint den dieser Woche; läge `--to` dadurch vor `--from`, den der nächsten Woche.
@@ -384,6 +387,8 @@ cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now untis-changes.timer
 ```
+
+`--live [INTERVAL]` lässt `untis` weiterlaufen und zeichnet die Ausgabe alle INTERVAL neu (Standard `5m`, mindestens `60s`; gleiches Format wie `--max-age`), bis du Strg-C drückst. Das funktioniert mit jeder Ansicht: `-s` (Standard, wenn du keine wählst), `--oneline`, `--table`, `--tests`, `--homework`, `--now` und `--start`/`--end`/`--free`. Eine Fußzeile zeigt, wann zuletzt aktualisiert wurde und wann die nächste Aktualisierung kommt. Schlägt eine Aktualisierung fehl (z. B. kein Netz), bleibt die letzte Ausgabe mit dem Fehler darunter stehen; Konfigurations- und Login-Fehler beenden die Schleife. Mit `--format json`/`waybar` wird stattdessen eine Zeile pro Aktualisierung ausgegeben, die ein Waybar-Modul ohne `interval` laufend lesen kann. Zusammen mit `--max-age` wird WebUntis nur abgefragt, wenn der Cache zu alt ist. `--live` lässt sich nicht mit `--changes` kombinieren (dafür gibt es den systemd-Timer) und nicht in `default_args` setzen.
 
 Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
 im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In
