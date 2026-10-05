@@ -1,6 +1,6 @@
 # WebUntis Scraper
 
-![Made With:vibecoding](https://img.shields.io/badge/made%20with-vibecoding-blueviolet?style=plastic)
+![Made With:vibecoding](https://img.shields.io/badge/made%20with-vibecoding-blueviolet?style=plastic) [![Tests](https://github.com/seesee010/webuntis-scraper/actions/workflows/tests.yml/badge.svg)](https://github.com/seesee010/webuntis-scraper/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![pipx](https://img.shields.io/badge/install-pipx-2A6DB2)
 ![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-informational)
