@@ -35,7 +35,7 @@ die Config-Dateien. Kein händisches Bearbeiten von JSON nötig. Details dazu in
 - Deinen **Stundenplan**, mit hervorgehobenen Entfällen, Raum-/Lehrer-Supplierungen und Prüfungen
 - Eine kompakte **Tages-, Einzeilen- oder Wochenraster-Ansicht** direkt im Terminal, mit Farben
 - Kommende **Prüfungen** und **Hausaufgaben** (mit Fälligkeit, Noten sobald vorhanden)
-- **Abwesenheiten** und ungelesene **Nachrichten**
+- **Abwesenheiten** mit Summen (Tage, versäumte Stunden, nicht entschuldigt) und ungelesene **Nachrichten**
 - `--now` für „welche Stunde habe ich gerade“, inklusive fertigem [Waybar](https://github.com/Alexays/Waybar)-Modul
 - `--changes --notify` für Desktop-Benachrichtigungen, sobald sich etwas ändert (Supplierung, Entfall, neue Hausaufgabe, …)
 - `--live` hält jede Ansicht offen und aktualisiert sie alle paar Minuten
@@ -258,6 +258,7 @@ untis -s --week            # diese Woche, Mo–So
 untis --now                # die aktuelle und die nächste Stunde
 untis --tests               # alle kommenden Tests / Prüfungen
 untis --homework             # alle offenen Hausaufgaben
+untis --absences             # Abwesenheiten dieses Schuljahrs, mit Summen
 untis --changes --notify   # was sich seit dem letzten Mal geändert hat, als Desktop-Benachrichtigung
 ```
 
@@ -322,6 +323,8 @@ untis -t --days-back 30 --days-forward 0   # Tests der letzten 30 Schultage (mit
 untis --homework                 # alle Hausaufgaben dieses Schuljahrs
 untis -H --days-forward 5        # Hausaufgaben, die in den nächsten 5 Schultagen fällig sind
 untis -t -H                      # beide Abschnitte
+untis --absences                 # Abwesenheiten dieses Schuljahrs, mit Summen
+untis -A --days-back 10 --days-forward 0   # Abwesenheiten der letzten 10 Schultage
 untis --now                      # die aktuelle und die nächste Stunde
 untis --now --format waybar      # JSON für ein Waybar-Custom-Modul
 untis --changes                  # was sich seit dem letzten --changes-Lauf geändert hat
@@ -368,6 +371,8 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 `--tests` (auch `-t` / `--exams`) zeigt nur Tests und Prüfungen, sortiert nach Datum mit „in N days“, der Note, falls WebUntis eine hat, und vergangenen Tests abgedunkelt. Ohne Zeitraum reicht es von heute bis zum Ende des Schuljahrs (das `days_forward` aus deiner Config gilt hier nicht); mit `--days-forward`, `--from`, `--week`, … nur dieser Zeitraum. Es werden nur die Prüfungen geladen.
 
 `--homework` (auch `-H`) zeigt nur Hausaufgaben: offene zuerst nach Fälligkeit (überfällige rot), danach erledigte abgedunkelt mit ✓, jeweils mit vollem Text auf die Terminalbreite umgebrochen, dazu Bemerkung und Anhänge, falls vorhanden. Ohne Zeitraum umfasst es das ganze Schuljahr; mit `--days-forward`, `--from`, … nur Hausaufgaben, die in diesem Zeitraum *fällig* sind (WebUntis filtert nach der Stunde, in der sie aufgegeben wurden, deshalb schaut `untis` weiter zurück und filtert selbst nach Fälligkeit). Zusammen mit `--tests` werden beide Abschnitte gezeigt.
+
+`--absences` (auch `-A`) zeigt nur Abwesenheiten, älteste zuerst, mit Summen in der Kopfzeile: Tage, versäumte Stunden und wie viele nicht entschuldigt sind. Jede Abwesenheit zeigt ihre Zeit, die betroffenen Stunden, ob sie entschuldigt ist (oder den Entschuldigungsstatus der Schule), den Grund sowie Text und Entschuldigungsnotiz eingerückt darunter; nicht entschuldigte sind rot. Stunden werden mit dem Stundenraster der Schule gezählt: Jede Einheit, die die Abwesenheit überschneidet, zählt. Eine Abwesenheit über mehrere Tage zählt ihre Wochentage (Ferien dazwischen sind nicht bekannt und zählen mit). Ohne Zeitraum umfasst es das ganze Schuljahr; mit `--days-back`, `--from`, … nur diesen Zeitraum. Kombinierbar mit `--tests` und `--homework`.
 
 `--now` zeigt die gerade laufende Stunde (mit Restzeit) und die nächste; nach Schulschluss oder am Wochenende die erste Stunde des nächsten Schultags. `--format json` gibt dasselbe als Daten aus, `--format waybar` das JSON, das ein [Waybar](https://github.com/Alexays/Waybar)-Custom-Modul erwartet (`text`, `tooltip`, `class`, wobei `class` der Status der Stunde oder `idle` ist). `--idle-empty` gibt zwischen den Stunden nichts aus, damit sich das Modul ausblendet. Mit `--max-age` wird die Leiste aus dem Cache gefüttert, statt WebUntis jede Minute abzufragen:
 

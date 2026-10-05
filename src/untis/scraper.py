@@ -265,11 +265,15 @@ class Scraper:
 
     async def _scrape_absences(self, start: date, end: date) -> dict[str, Any]:
         raw = await self.client.get_absences(start, end)
+        grid = getattr(self.client, "time_grid", None)
         return {
             "source": "api",
             "start": start.isoformat(),
             "end": end.isoformat(),
             "items": [normalize_absence(x) for x in raw],
+            # The school's periods, to count missed lessons (--absences)
+            # without fetching the timetable.
+            "time_grid": grid if isinstance(grid, list) else [],
         }
 
     async def _scrape_messages(self) -> dict[str, Any]:

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 
-from . import __version__, cache, changes, dayinfo, live, setup_wizard
+from . import __version__, absences, cache, changes, dayinfo, live, setup_wizard
 from . import now as now_mod
 from .browser import BrowserSession
 from .config import (
@@ -230,6 +230,12 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
              "given with --days-forward, --from, …. Combinable with --tests.",
     )
     ap.add_argument(
+        "-A", "--absences", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Only show absences with totals (days, lessons, not excused): all of "
+             "this school year, or those in the window given with --days-back, --from, …. "
+             "Combinable with --tests and --homework.",
+    )
+    ap.add_argument(
         "--oneline", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print one line per day instead of the day view "
              "(* changed, ~X~ cancelled/removed, ! exam).",
@@ -331,26 +337,28 @@ def _parse_args(
                        if getattr(args, f"{what}_q") is not None), None)
     if args.query and (shortcut or from_to or days):
         ap.error("--start/--end/--free can't be combined with other date options")
-    if (args.tests or args.homework) and (args.query or args.oneline or args.table):
-        ap.error("--tests/--homework can't be combined with --start/--end/--free, "
+    # --tests/--homework/--absences: only these sections instead of the day view.
+    args.sections = bool(args.tests or args.homework or args.absences)
+    if args.sections and (args.query or args.oneline or args.table):
+        ap.error("--tests/--homework/--absences can't be combined with --start/--end/--free, "
                  "--oneline or --table")
     args.window_given = bool(shortcut or from_to or days)
-    if args.now and (args.window_given or args.query or args.tests or args.homework
+    if args.now and (args.window_given or args.query or args.sections
                      or args.oneline or args.table):
         ap.error("--now can't be combined with date options, questions, --tests, "
-                 "--homework, --oneline or --table")
+                 "--homework, --absences, --oneline or --table")
     if args.format == "waybar" and not args.now:
         ap.error("--format waybar only works with --now")
-    if args.changes and (args.query or args.now or args.tests or args.homework
+    if args.changes and (args.query or args.now or args.sections
                          or args.oneline or args.table):
         ap.error("--changes can't be combined with questions, --now, --tests, "
-                 "--homework, --oneline or --table")
+                 "--homework, --absences, --oneline or --table")
     if args.notify and not args.changes:
         ap.error("--notify only works with --changes")
     if args.live is not None and args.changes:
         ap.error("--live can't be combined with --changes (use the systemd timer instead)")
     if args.live is not None and not (_layout(args) or args.query or args.now
-                                      or args.tests or args.homework):
+                                      or args.sections):
         args.short = True                # otherwise there would be nothing to redraw
     args.window = None
     if from_to:
@@ -457,7 +465,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         return await _answer_now(cfg, args, today, now)
     if args.changes:
         return await _answer_changes(cfg, args, today, now)
-    if args.tests or args.homework:
+    if args.sections:
         _only_sections(cfg, args)
 
     payload, fetched = await _get_payload(cfg, args, today, now)
@@ -466,13 +474,18 @@ async def _async_main(args: argparse.Namespace) -> int:
         write_latest(payload, cfg.output_dir, keep_raw=cfg.include_raw)
     color = resolve_color(args.color)
     layout = _layout(args)
-    if args.tests or args.homework:
+    if args.sections:
         parts = []
         if args.tests:
+            # Homework/absences start at the school year's beginning; tests
+            # still only show the upcoming ones then.
             parts.append(render_tests(payload, color=color, today=today, now=now,
-                                      upcoming_only=args.homework and not args.window_given))
+                                      upcoming_only=(args.homework or args.absences)
+                                      and not args.window_given))
         if args.homework:
             parts.append(render_homework(payload, color=color, today=today, now=now))
+        if args.absences:
+            parts.append(absences.render_absences(payload, color=color, today=today, now=now))
         print("\n\n".join(parts))
     elif layout:
         print(render_summary(payload, color=color, layout=layout))
@@ -482,17 +495,19 @@ async def _async_main(args: argparse.Namespace) -> int:
 
 
 def _only_sections(cfg, args: argparse.Namespace) -> None:
-    """--tests/--homework: fetch only those modules. Without a window on
-    the command line: tests from today, homework from the start of the
-    school year, both until its end (config days_forward is meant for the
-    day view and is ignored). Homework is always kept by due date."""
-    cfg.scrape_timetable = cfg.scrape_absences = cfg.scrape_messages = False
+    """--tests/--homework/--absences: fetch only those modules. Without a
+    window on the command line: tests from today, homework and absences
+    from the start of the school year, all until its end (config
+    days_forward is meant for the day view and is ignored). Homework is
+    always kept by due date."""
+    cfg.scrape_timetable = cfg.scrape_messages = False
     cfg.scrape_exams = bool(args.tests)
     cfg.scrape_homework = bool(args.homework)
+    cfg.scrape_absences = bool(args.absences)
     cfg.homework_by_due_date = bool(args.homework)
     if not args.window_given:
         cfg.until_school_year_end = True
-        cfg.from_school_year_start = bool(args.homework)
+        cfg.from_school_year_start = bool(args.homework or args.absences)
 
 
 async def _get_payload(cfg, args: argparse.Namespace, today: date, now: datetime) -> tuple[dict, bool]:
@@ -684,7 +699,7 @@ def main() -> int:
         print(render_legend(resolve_color(args.color)))
         return 0
     _setup_logging(args.verbose,
-                   quiet=bool(_layout(args) or args.query or args.tests or args.homework
+                   quiet=bool(_layout(args) or args.query or args.sections
                               or args.now or args.changes or args.live is not None))
     if args.default_args:
         logging.getLogger(__name__).debug(
