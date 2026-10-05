@@ -37,7 +37,7 @@ untis --short --next
 - 你的**课表**，取消的课、代课/换教室和考试都会高亮显示
 - 在终端里直接看的紧凑**每日视图、单行视图或周课表**，带颜色
 - 即将到来的**考试**和**作业**（含截止日期，成绩出来后也会显示）
-- **缺勤记录**和未读**消息**
+- **缺勤记录**（含汇总：天数、缺课节数、未请假数）和未读**消息**
 - `--now` 用来回答“我现在在上什么课”，还自带一个 [Waybar](https://github.com/Alexays/Waybar) 模块
 - `--changes --notify`，一旦有变化（代课、取消、新作业……）就发桌面通知
 - `--live` 让任意视图保持打开，并每隔几分钟自动刷新
@@ -246,6 +246,7 @@ untis -s --week            # 本周（周一到周日）
 untis --now                # 当前的课和下一节课
 untis --tests               # 所有即将到来的考试
 untis --homework             # 所有未完成的作业
+untis --absences             # 本学年的缺勤记录，带汇总
 untis --changes --notify   # 自上次以来的变化，作为桌面通知
 ```
 
@@ -309,6 +310,8 @@ untis -t --days-back 30 --days-forward 0   # 最近 30 个上课日的考试（�
 untis --homework                 # 本学年的所有作业
 untis -H --days-forward 5        # 接下来 5 个上课日内到期的作业
 untis -t -H                      # 两个部分都显示
+untis --absences                 # 本学年的缺勤记录，带汇总
+untis -A --days-back 10 --days-forward 0   # 最近 10 个上课日的缺勤记录
 untis --now                      # 当前的课和下一节课
 untis --now --format waybar      # 用于 Waybar 自定义模块的 JSON
 untis --changes                  # 自上次 --changes 运行以来的变化
@@ -353,6 +356,8 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 `--tests`（也可以用 `-t` / `--exams`）只显示考试和测验，按日期排序并显示 “in N days”，如果 WebUntis 提供成绩则显示成绩，已经过去的考试会变暗。不指定时间范围时，范围是从今天到学年结束（配置中的 `days_forward` 在这里不适用）；使用 `--days-forward`、`--from`、`--week` 等时只显示该范围。只会获取考试数据。
 
 `--homework`（也可以用 `-H`）只显示作业：未完成的按截止日期排在前面（已逾期的为红色），然后是已完成的（变暗并带 ✓），每条作业都会显示完整内容并按终端宽度换行，如有备注和附件也会显示。不指定时间范围时包含整个学年；使用 `--days-forward`、`--from` 等时，只显示在该范围内*到期*的作业（WebUntis 按布置作业的那节课筛选，所以 `untis` 会往前多查一段时间，再自己按截止日期筛选）。与 `--tests` 一起使用时会显示两个部分。
+
+`--absences`（也可以用 `-A`）只显示缺勤记录，最早的在前，标题行显示汇总：天数、缺课节数以及有多少条未获准假。每条缺勤记录显示时间、涉及的课节数、是否已准假（或学校自己的请假状态）、原因，以及缩进显示的说明和请假备注；未准假的显示为红色。课节数按学校的作息时间表计算：与缺勤时间有重叠的每一节课都算。跨多天的缺勤只计算其中的工作日（中间的假期无法得知，也会计算在内）。不指定时间范围时包含整个学年；使用 `--days-back`、`--from` 等时只包含该范围。可以与 `--tests` 和 `--homework` 组合使用。
 
 `--now` 显示正在上的课（及剩余时间）和下一节课；放学后或周末则显示下一个上课日的第一节课。`--format json` 以数据形式输出同样的内容，`--format waybar` 输出 [Waybar](https://github.com/Alexays/Waybar) 自定义模块所需的 JSON（`text`、`tooltip`、`class`，其中 `class` 是该节课的状态或 `idle`）。`--idle-empty` 在课间不输出任何内容，这样模块会自动隐藏。配合 `--max-age`，状态栏会使用缓存数据，而不是每分钟都请求 WebUntis：
 

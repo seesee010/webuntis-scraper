@@ -41,7 +41,7 @@ toi et écrit les fichiers de configuration. Pas besoin de modifier du JSON à l
 - Ton **emploi du temps**, avec annulations, remplacements de salle/enseignant et examens mis en évidence
 - Une **vue par jour, par ligne ou en grille hebdomadaire** compacte directement dans le terminal, en couleurs
 - Les **examens** et **devoirs** à venir (avec échéances, notes dès qu'elles sont disponibles)
-- Les **absences** et les **messages** non lus
+- Les **absences** avec des totaux (jours, cours manqués, non justifiées) et les **messages** non lus
 - `--now` pour savoir « quel cours j'ai en ce moment », avec un module [Waybar](https://github.com/Alexays/Waybar) prêt à l'emploi
 - `--changes --notify` pour des notifications de bureau à chaque changement (remplacement, annulation, nouveau devoir, …)
 - `--live` garde n'importe quelle vue ouverte et la rafraîchit toutes les quelques minutes
@@ -261,6 +261,7 @@ untis -s --week            # cette semaine, du lundi au dimanche
 untis --now                # le cours actuel et le suivant
 untis --tests               # tous les contrôles / examens à venir
 untis --homework             # tous les devoirs non faits
+untis --absences             # absences de cette année scolaire, avec totaux
 untis --changes --notify   # ce qui a changé depuis la dernière fois, en notification de bureau
 ```
 
@@ -325,6 +326,8 @@ untis -t --days-back 30 --days-forward 0   # contrôles des 30 derniers jours de
 untis --homework                 # tous les devoirs de cette année scolaire
 untis -H --days-forward 5        # devoirs à rendre dans les 5 prochains jours de cours
 untis -t -H                      # les deux sections
+untis --absences                 # absences de cette année scolaire, avec totaux
+untis -A --days-back 10 --days-forward 0   # absences des 10 derniers jours de cours
 untis --now                      # le cours actuel et le suivant
 untis --now --format waybar      # JSON pour un module personnalisé Waybar
 untis --changes                  # ce qui a changé depuis la dernière exécution de --changes
@@ -372,6 +375,8 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 
 `--homework` (aussi `-H`) n'affiche que les devoirs : ceux à faire d'abord par date d'échéance (en retard en rouge), puis ceux terminés grisés avec un ✓, chacun avec son texte complet adapté à la largeur du terminal, une remarque et les pièces jointes s'il y en a. Sans période, il couvre toute l'année scolaire ; avec `--days-forward`, `--from`, … seulement les devoirs *à rendre* dans cette période (WebUntis filtre par le cours où ils ont été donnés, donc `untis` regarde plus loin en arrière et filtre lui-même par échéance). Avec `--tests`, les deux sections sont affichées.
 
+`--absences` (aussi `-A`) n'affiche que les absences, les plus anciennes d'abord, avec des totaux dans l'en-tête : jours, cours manqués et combien ne sont pas justifiées. Chaque absence indique son horaire, les cours concernés, si elle est justifiée (ou le statut de justification propre à l'école), le motif, ainsi que le texte et la note de justification en retrait en dessous ; celles non justifiées sont en rouge. Les cours sont comptés avec la grille horaire de l'école : chaque période que l'absence chevauche compte. Une absence sur plusieurs jours compte ses jours de semaine (les vacances entre deux ne sont pas connues et comptent aussi). Sans période, elle couvre toute l'année scolaire ; avec `--days-back`, `--from`, … seulement cette période. Combinable avec `--tests` et `--homework`.
+
 `--now` affiche le cours en cours (avec le temps restant) et le suivant ; après les cours ou le week-end, le premier cours du prochain jour de cours. `--format json` affiche la même chose sous forme de données, `--format waybar` le JSON attendu par un module personnalisé [Waybar](https://github.com/Alexays/Waybar) (`text`, `tooltip`, `class`, où `class` est le statut du cours ou `idle`). `--idle-empty` n'affiche rien entre les cours pour que le module se masque. Avec `--max-age`, la barre est alimentée par le cache au lieu d'interroger WebUntis chaque minute :
 
 ```jsonc
@@ -391,7 +396,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now untis-changes.timer
 ```
 
-`--live [INTERVAL]` laisse `untis` tourner et redessine la sortie toutes les INTERVAL (par défaut `5m`, au moins `60s` ; même format que `--max-age`) jusqu'à ce que vous appuyiez sur Ctrl-C. Cela fonctionne avec toutes les vues : `-s` (par défaut si vous n'en choisissez aucune), `--oneline`, `--table`, `--tests`, `--homework`, `--now` et `--start`/`--end`/`--free`. Un pied de page indique la dernière mise à jour et la prochaine. Si un rafraîchissement échoue (p. ex. pas de réseau), la dernière sortie reste affichée avec l'erreur en dessous ; les erreurs de configuration et de connexion arrêtent la boucle. Avec `--format json`/`waybar`, une ligne est affichée par rafraîchissement, qu'un module Waybar sans `interval` peut lire en continu. Combiné à `--max-age`, WebUntis n'est interrogé que si le cache est trop ancien. `--live` ne peut pas être combiné avec `--changes` (utilisez le minuteur systemd) ni être mis dans `default_args`.
+`--live [INTERVAL]` laisse `untis` tourner et redessine la sortie toutes les INTERVAL (par défaut `5m`, au moins `60s` ; même format que `--max-age`) jusqu'à ce que tu appuies sur Ctrl-C. Cela fonctionne avec toutes les vues : `-s` (par défaut si tu n'en choisis aucune), `--oneline`, `--table`, `--tests`, `--homework`, `--now` et `--start`/`--end`/`--free`. Un pied de page indique la dernière mise à jour et la prochaine. Si un rafraîchissement échoue (p. ex. pas de réseau), la dernière sortie reste affichée avec l'erreur en dessous ; les erreurs de configuration et de connexion arrêtent la boucle. Avec `--format json`/`waybar`, une ligne est affichée par rafraîchissement, qu'un module Waybar sans `interval` peut lire en continu. Combiné à `--max-age`, WebUntis n'est interrogé que si le cache est trop ancien. `--live` ne peut pas être combiné avec `--changes` (utilise le minuteur systemd) ni être mis dans `default_args`.
 
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y

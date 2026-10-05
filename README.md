@@ -35,7 +35,7 @@ the config files. No manual editing of JSON required. See [Installation](#instal
 - Your **timetable**, with cancellations, room/teacher substitutions and exams highlighted
 - A compact **day, oneline or week-table view** right in the terminal, with colors
 - Upcoming **exams** and **homework** (with due dates, grades once they're in)
-- **Absences** and unread **messages**
+- **Absences** with totals (days, missed lessons, not excused) and unread **messages**
 - `--now` for "what lesson am I in right now", including a ready-made [Waybar](https://github.com/Alexays/Waybar) module
 - `--changes --notify` for desktop notifications whenever something changes (substitutions, cancellations, new homework, …)
 - `--live` keeps any view open and redraws it every few minutes
@@ -253,6 +253,7 @@ untis -s --week            # this week, Mon–Sun
 untis --now                # the current and the next lesson
 untis --tests               # all upcoming tests / exams
 untis --homework             # all open homework
+untis --absences             # absences of this school year, with totals
 untis --changes --notify   # what changed since last time, as a desktop notification
 ```
 
@@ -317,6 +318,8 @@ untis -t --days-back 30 --days-forward 0   # tests of the last 30 school days (w
 untis --homework                 # all homework of this school year
 untis -H --days-forward 5        # homework due in the next 5 school days
 untis -t -H                      # both sections
+untis --absences                 # absences of this school year, with totals
+untis -A --days-back 10 --days-forward 0   # absences of the last 10 school days
 untis --now                      # the current and the next lesson
 untis --now --format waybar      # JSON for a Waybar custom module
 untis --changes                  # what changed since the last --changes run
@@ -363,6 +366,8 @@ Tue 06.10.  07:50–13:25  NET/PROG NET/PROG ~GEO~ MATH! SOC GEO
 `--tests` (also `-t` / `--exams`) shows only tests and exams, sorted by date with "in N days", the grade if WebUntis has one, and past tests dimmed. Without a window it covers everything from today until the end of the school year (the `days_forward` from your config doesn't apply here); with `--days-forward`, `--from`, `--week`, … only that window. Only the exams are fetched.
 
 `--homework` (also `-H`) shows only homework: open ones first by due date (overdue ones in red), then completed ones dimmed with a ✓, each with its full text wrapped to the terminal, a note and attachments if there are any. Without a window it covers the whole school year; with `--days-forward`, `--from`, … only homework *due* in that window (WebUntis filters by the lesson it was given in, so `untis` looks further back and filters by due date itself). Together with `--tests` both sections are shown.
+
+`--absences` (also `-A`) shows only absences, oldest first, with totals in the header: days, missed lessons and how many aren't excused. Each absence shows its time, the lessons it covers, whether it's excused (or the school's own excuse status), the reason, and the text and excuse note on indented lines; not excused ones are red. Lessons are counted with the school's time grid: every period the absence overlaps counts. An absence over several days counts its weekdays (holidays in between aren't known and still count). Without a window it covers the whole school year; with `--days-back`, `--from`, … only that window. It can be combined with `--tests` and `--homework`.
 
 `--now` shows the lesson running right now (with the time left) and the next one; after school or on a weekend, the first lesson of the next school day. `--format json` prints the same as data, `--format waybar` the JSON a [Waybar](https://github.com/Alexays/Waybar) custom module expects (`text`, `tooltip`, `class`, where `class` is the lesson's status or `idle`). `--idle-empty` prints nothing between lessons so the module hides. With `--max-age` the bar is fed from the cache instead of hitting WebUntis every minute:
 
