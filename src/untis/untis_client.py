@@ -185,6 +185,19 @@ def _time_grid(app_data: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
+def _with_reasons(absences: list[dict], reasons: list[dict]) -> list[dict]:
+    """Fill in an absence's empty `reason` from the school's
+    `absenceReasons` list by `reasonId` (some schools only send the id)."""
+    names = {r.get("id"): r.get("name") or r.get("longName") for r in reasons
+             if isinstance(r, dict)}
+    out = []
+    for ab in absences:
+        if not ab.get("reason") and names.get(ab.get("reasonId")):
+            ab = {**ab, "reason": names[ab["reasonId"]]}
+        out.append(ab)
+    return out
+
+
 def _school_year_bound(app_data: dict[str, Any], which: str) -> Optional[date]:
     """First ("start") or last ("end") day of the current school year from
     /app/data, if present."""
@@ -677,7 +690,8 @@ class WebUntisClient:
             "studentId": pid,
             "excuseStatusId": -1,
         })
-        return (res.get("data") or {}).get("absences") or []
+        data = res.get("data") or {}
+        return _with_reasons(data.get("absences") or [], data.get("absenceReasons") or [])
 
     async def get_messages(self) -> list[dict]:
         res = await self._rest_get("/messages", {})
