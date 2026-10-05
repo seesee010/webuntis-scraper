@@ -359,3 +359,151 @@ def test_render_summary_table_uses_absences_and_keeps_header_and_footer():
 def test_legend_explains_the_absent_mark():
     assert "  absent      [MATH] in --table" in render_legend(False)
     assert "\033[2mMATH\033[0m in --table" in render_legend(True)
+
+
+# --- now: the running lesson, past periods, the line under the table -------
+from datetime import datetime  # noqa: E402
+
+from untis.summary import _block_mark, _mark_lines, _now_line, _period_mark  # noqa: E402
+
+TUE_0952 = datetime(2026, 10, 6, 9, 52)        # during Tue's exam (09:40–10:30)
+MON_0900 = datetime(2026, 10, 5, 9, 0)         # 2nd half of Mon's double lesson
+MON_1000 = datetime(2026, 10, 5, 10, 0)        # break before Mon's ENG at 10:45
+MON_0700 = datetime(2026, 10, 5, 7, 0)         # before school
+MON_1300 = datetime(2026, 10, 5, 13, 0)        # school is over
+
+
+@pytest.mark.parametrize("start, end, hm, mark", [
+    ("07:50", "08:40", "09:00", "past"),
+    ("07:50", "08:40", "08:40", "past"),           # ends exactly now
+    ("08:45", "09:35", "09:00", "current"),
+    ("08:45", "09:35", "08:45", "current"),        # starts exactly now
+    ("09:40", "10:30", "09:00", None),
+])
+def test_period_mark(start, end, hm, mark):
+    assert _period_mark(start, end, hm) == mark
+
+
+@pytest.mark.parametrize("marks, mark", [
+    (["past", "current"], "current"), (["current", None], "current"),
+    (["past", "past"], "past"), (["past", None], None), ([None], None), ([], None),
+])
+def test_block_mark(marks, mark):
+    assert _block_mark(marks) == mark
+
+
+def test_mark_lines_current_without_colors():
+    assert _mark_lines(["MATH", "R101"], "current", "", OFF) == ["▶ MATH", "R101"]
+
+
+def test_mark_lines_current_with_colors():
+    out = _mark_lines(["MATH", "R101"], "current", "", ON)
+    assert out[0] == "\033[1m\033[33m▶ \033[0m\033[0m\033[1m\033[33mMATH\033[0m\033[0m"
+    exam = _mark_lines(["\033[1;35mMATH!\033[0m"], "current", "exam", ON)
+    assert exam[0].endswith("\033[1;35mMATH!\033[0m")                  # keeps its color
+
+
+def test_mark_lines_past():
+    assert _mark_lines(["\033[36mR101\033[0m"], "past", "", ON) == ["\033[2mR101\033[0m"]
+    assert _mark_lines(["MATH"], "past", "", OFF) == ["MATH"]
+    geo = ["\033[31;9mGEO\033[0m"]
+    assert _mark_lines(geo, "past", "cancelled", ON) == geo                 # keeps red
+
+
+def test_mark_lines_nothing():
+    assert _mark_lines(["MATH"], None, "", ON) == ["MATH"]
+    assert _mark_lines([], "current", "", ON) == []
+
+
+def test_now_line_during_a_lesson():
+    rows_mon = _days_rows(TT)[MON]
+    live = {"now": "09:00", "current": {0}, "next_in": None}
+    assert _now_line(rows_mon, live, OFF) == "▶ now 09:00 · MATH · 35 min left"
+
+
+def test_now_line_parallel_lessons_and_break():
+    rows_tue = _days_rows(TT)[TUE]
+    live = {"now": "07:55", "current": {0, 1}, "next_in": None}
+    assert _now_line(rows_tue, live, OFF) == "▶ now 07:55 · NET/PROG · 45 min left"
+    live = {"now": "07:30", "current": set(), "next_in": 20}
+    assert _now_line(rows_tue, live, OFF) == "now 07:30 · next: NET/PROG at 07:50 (in 20 min)"
+
+
+def test_now_line_skips_cancelled_next_lesson():
+    rows_tue = _days_rows(TT)[TUE]
+    live = {"now": "08:42", "current": set(), "next_in": 58}
+    assert _now_line(rows_tue, live, OFF).startswith("now 08:42 · next: MATH at 09:40")
+
+
+def test_column_widths_make_room_for_the_marker():
+    cells = [[(["ABCDEFGH"], 1, "current")]]
+    assert _column_widths(["Mon"], cells, 100) == [10]
+    assert _column_widths(["Mon"], [[(["ABCDEFGH"], 1, "past")]], 100) == [8]
+
+
+def test_draw_table_today_header_and_period_times():
+    cells = [[(["A"], "a", "past"), (["B"], "b", "current")]]
+    out = _draw_table(ON, UNITS[:2], ["Mon"], cells, 80, periods=["past", "current"], today=0)
+    assert "\033[33mMon" in out[1]
+    assert "\033[2m07:50\033[0m" in out[3]                                   # past: dimmed
+    assert "\033[33m08:45" in out[6] and "▶ " in out[6]
+
+
+def test_draw_table_marks_a_merged_block_by_any_period():
+    cells = [[(["A"], "k", "past"), (["A"], "k", "current")]]
+    out = _draw_table(OFF, UNITS[:2], ["Mon"], cells, 80, periods=["past", "current"])
+    assert out[3] == "│ 07:50 │ ▶ A    │"
+
+
+def test_render_table_during_a_lesson():
+    out = body(_render_table(TT, OFF, width=80, now=TUE_0952))
+    assert out[9] == "│ 09:40 │            │ ▶ MATH!    │"
+    assert out[-1] == "▶ now 09:52 · MATH · 38 min left"
+    assert not any("▶" in l for l in out[:9])                       # Mon and past periods
+
+
+def test_render_table_merged_double_lesson_is_current():
+    out = body(_render_table(TT, OFF, width=80, now=MON_0900))
+    assert out[3] == "│ 07:50 │ ▶ MATH     │ NET/PROG   │"
+    assert out[-1] == "▶ now 09:00 · MATH · 35 min left"
+
+
+def test_render_table_break_and_before_school():
+    assert body(_render_table(TT, OFF, width=80, now=MON_1000))[-1] == \
+        "now 10:00 · next: ENG at 10:45 (in 45 min)"
+    out = body(_render_table(TT, OFF, width=80, now=MON_0700))
+    assert out[-1] == "now 07:00 · next: MATH at 07:50 (in 50 min)"
+    assert not any("▶" in l for l in out)
+
+
+def test_render_table_no_marks_after_school_or_on_other_days():
+    for now in (MON_1300, datetime(2026, 10, 7, 9, 0), None):
+        out = body(_render_table(TT, ON, width=80, now=now))
+        assert out[-1].startswith("└") and not any("▶" in l for l in out)
+        assert "\033[2mMATH" not in "\n".join(out)                       # nothing dimmed
+        assert "\033[33m" not in "\n".join(out[2:])                      # no yellow below
+
+
+def test_render_table_today_header_stays_yellow_after_school():
+    assert "\033[33mMon 05.10." in body(_render_table(TT, ON, width=80, now=MON_1300))[1]
+    other = body(_render_table(TT, ON, width=80, now=datetime(2026, 10, 7, 9, 0)))
+    assert "\033[33m" not in other[1]                                    # today not shown
+
+
+def test_render_table_cancelled_lesson_is_not_running():
+    out = body(_render_table(TT, OFF, width=80, now=datetime(2026, 10, 6, 9, 0)))
+    assert out[6] == "│ 08:45 │            │ ~GEO~      │"                # no ▶
+    assert out[-1] == "now 09:00 · next: MATH at 09:40 (in 40 min)"
+
+
+def test_render_table_past_periods_dimmed_today_only():
+    out = body(_render_table(TT, ON, width=80, now=TUE_0952))
+    assert "\033[2mNET/PROG\033[0m" in out[3]                            # Tue: over
+    assert "\033[31;9mGEO\033[0m" in out[6]                              # cancelled keeps red
+    assert "MATH" in out[3] and "\033[2mMATH" not in out[3]              # Mon: untouched
+
+
+def test_render_summary_table_passes_now():
+    out = render_summary({"meta": {}, "timetable": TT}, color=False, now=TUE_0952,
+                         layout="table", width=80)
+    assert "▶ now 09:52 · MATH · 38 min left" in out

@@ -518,7 +518,10 @@ def _column_widths(heads: list[str], cells: list[list[tuple[list[str], Any]]],
                    width: int) -> list[int]:
     """Width of every day column: its widest content within
     _MIN_COL.._MAX_COL, shrunk evenly to fit the terminal width."""
-    need = [max([len(_plain(h))] + [len(_plain(l)) for lines, _ in col for l in lines])
+    def lens(cell: tuple) -> list[int]:
+        lines, extra = cell[0], 2 if cell[2:] == ("current",) else 0     # "▶ "
+        return [len(_plain(l)) + (extra if k == 0 else 0) for k, l in enumerate(lines)]
+    need = [max([len(_plain(h))] + [w for cell in col for w in lens(cell)])
             for h, col in zip(heads, cells)]
     need = [min(max(w, _MIN_COL), _MAX_COL) for w in need]
     fixed = _TIME_W + 4                         # "│ 07:50 " + the last "│"
@@ -528,29 +531,63 @@ def _column_widths(heads: list[str], cells: list[list[tuple[list[str], Any]]],
     return need
 
 
+def _block_mark(marks: list[Optional[str]]) -> Optional[str]:
+    """The "now" mark of a merged cell from its periods' marks: "current"
+    if any period runs now, "past" if all of them are over."""
+    if "current" in marks:
+        return "current"
+    return "past" if marks and all(m == "past" for m in marks) else None
+
+
+def _mark_lines(lines: list[str], mark: Optional[str], role: str, st: _Style) -> list[str]:
+    """▶ in front of the running lesson, past lessons dimmed (cancelled
+    and removed ones keep their style), as in the day view."""
+    if mark == "current" and lines:
+        first = lines[0] if _plain(lines[0]) != lines[0] else st.bold(st.yellow(lines[0]))
+        return [st.bold(st.yellow("▶ ")) + first] + lines[1:]   # own colors (exam, …) stay
+    if mark == "past" and role not in ("cancelled", "removed"):
+        return [st.dim(_plain(l)) for l in lines]
+    return lines
+
+
 def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
-                cells: list[list[tuple[list[str], Any]]], width: int) -> list[str]:
+                cells: list[list[tuple]], width: int,
+                periods: Optional[list[Optional[str]]] = None,
+                today: Optional[int] = None) -> list[str]:
     """The bordered grid: a time column (start / end) and one column per
-    day; `cells[c][i]` is (lines, key) of day c in period i. After a
-    day's last lesson its column is open: no boxes, and no border on
-    sides where an open column (or the table's edge) is next to it."""
+    day; `cells[c][i]` is (lines, key[, mark]) of day c in period i,
+    with mark "current"/"past" for today. `periods` marks the time
+    column the same way, `today` is the index of today's column (yellow
+    header). After a day's last lesson its column is open: no boxes,
+    and no border on sides where an open column (or the edge) is."""
     widths = [_TIME_W] + _column_widths(heads, cells, width)
     n = len(units)
+    periods = periods or [None] * n
     cols: list[list[Optional[str]]] = [[]]
     for i, (start, end) in enumerate(units):
-        cols[0] += [start, st.dim(end)] + ([_LINE] if i < n - 1 else [])
+        if periods[i] == "current":
+            times = [st.bold(st.yellow(start)), st.bold(st.yellow(end))]
+        elif periods[i] == "past":
+            times = [st.dim(start), st.dim(end)]
+        else:
+            times = [start, st.dim(end)]
+        cols[0] += times + ([_LINE] if i < n - 1 else [])
     for col in cells:
         lines: list[Optional[str]] = []
-        last = max((i for i, (_, key) in enumerate(col) if key is not None), default=-1)
+        last = max((i for i, cell in enumerate(col) if cell[1] is not None), default=-1)
         i = 0
         while i < n:
-            content, key = col[i]
+            content, key = col[i][0], col[i][1]
             if key is None and i > last:        # nothing comes anymore
                 lines += [_OPEN] * ((n - 1 - i) * 3 + 2)
                 break
             j = i
             while key is not None and j + 1 < n and col[j + 1][1] == key:
                 j += 1                          # merge equal neighbours
+            if key is not None:
+                mark = _block_mark([c[2] if len(c) > 2 else None for c in col[i:j + 1]])
+                role = key[2] if isinstance(key, tuple) and len(key) > 2 else ""
+                content = _mark_lines(content, mark, role, st)
             height = (j - i) * 3 + 2
             lines += (content + [""] * height)[:height]
             if j < n - 1:
@@ -571,7 +608,9 @@ def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
 
     out = [rule("┌", "┬", "┐"),
            "│" + "│".join(f" {_fit(h, w)} " for h, w in
-                         zip([st.bold("Time")] + [st.bold(h) for h in heads], widths)) + "│",
+                         zip([st.bold("Time")] + [st.bold(st.yellow(h)) if c == today
+                                                  else st.bold(h) for c, h in enumerate(heads)],
+                             widths)) + "│",
            "".join(_junction(True, vertical(k, 0), k > 0, k < len(cols))
                    + ("─" * (widths[k] + 2) if k < len(cols) else "")
                    for k in range(len(cols) + 1))]
@@ -597,13 +636,37 @@ def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
     return out
 
 
+def _now_line(rows: list[dict], live: dict, st: _Style) -> str:
+    """Under today's table, like the day view: the running lesson and
+    the time left, or the next lesson during a break / before school."""
+    if live["current"]:
+        cur = [rows[i] for i in sorted(live["current"])]
+        names = "/".join(dict.fromkeys(r["subject"] or r["title"] for r in cur))
+        left = _minutes_between(live["now"], min(r["end"] for r in cur))
+        return st.bold(st.yellow(f"▶ now {live['now']} · {names} · {_fmt_minutes(left)} left"))
+    nxt = [r for r in rows if _takes_place(r) and r.get("start", "") > live["now"]]
+    first = min(r["start"] for r in nxt)
+    names = "/".join(dict.fromkeys(r["subject"] or r["title"] for r in nxt if r["start"] == first))
+    return st.cyan(f"now {live['now']} · next: {names} at {first} "
+                   f"(in {_fmt_minutes(live['next_in'])})")
+
+
+def _period_mark(start: str, end: str, hm: str) -> Optional[str]:
+    """"past" / "current" / None for a period start..end at hm ("HH:MM")."""
+    if end <= hm:
+        return "past"
+    return "current" if start <= hm < end else None
+
+
 def _render_table(
     timetable: dict, st: _Style, window: dict | None = None, width: int | None = None,
-    absences: dict | None = None,
+    absences: dict | None = None, now: Optional[datetime] = None,
 ) -> list[str]:
     """--table: one bordered grid per week, periods as rows (start and
     end time), days as columns. Equal neighbouring lessons share a cell;
-    periods you were absent in are grayed out."""
+    periods you were absent in are grayed out. While school runs today
+    (`now`), the running lesson gets a ▶, past periods are dimmed and a
+    line under the table says what runs now / comes next."""
     days = _days_rows(timetable)
     if not days:
         return ["", st.dim("  No lessons in this window.")]
@@ -620,12 +683,26 @@ def _render_table(
         if not used:
             continue
         rows = range(used[0], used[-1] + 1)
-        cells = [[_table_cell(slots[d][i], st,
-                              bool(slots[d][i]) and _is_absent(absent.get(d, []), *units[i]))
-                  for i in rows] for d in week_days]
+        today = now.date().isoformat() if now else None
+        live = _live_state(today, days[today], now) if today in week_days else None
+        periods = [_period_mark(*units[i], live["now"]) if live else None for i in rows]
+
+        def mark(d: str, k: int, i: int) -> Optional[str]:
+            if not live or d != today or not slots[d][i]:
+                return None
+            if periods[k] == "current" and not any(_takes_place(r) for r in slots[d][i]):
+                return None                     # a cancelled lesson isn't running
+            return periods[k]
+        cells = [[(*_table_cell(slots[d][i], st,
+                                bool(slots[d][i]) and _is_absent(absent.get(d, []), *units[i])),
+                   mark(d, k, i))
+                  for k, i in enumerate(rows)] for d in week_days]
         out.append("")
         out += _draw_table(st, [units[i] for i in rows], [_fmt_day(d) for d in week_days],
-                           cells, width)
+                           cells, width, periods=periods,
+                           today=week_days.index(today) if today in week_days else None)
+        if live:
+            out.append(_now_line(days[today], live, st))
     return out
 
 
@@ -711,7 +788,7 @@ def render_summary(
             lines += ["", st.red(f"{name}: {section['error']}")]
             continue
         if name == "timetable" and layout == "table":
-            lines += _render_table(section, st, window, width, payload.get("absences"))
+            lines += _render_table(section, st, window, width, payload.get("absences"), now)
         elif name == "timetable":
             lines += _render_timetable(section, st, window, now)
         else:
