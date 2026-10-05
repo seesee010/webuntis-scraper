@@ -213,10 +213,38 @@ def test_draw_table_merges_equal_neighbours():
                        "└───────┴────────────┘"]
 
 
-def test_draw_table_does_not_merge_empty_periods():
-    cells = [[([], None), ([], None)], [(["A"], "a"), (["A"], "a")]]
+def test_draw_table_keeps_boxes_for_free_periods_between_lessons():
+    cells = [[(["A"], "a"), ([], None), (["B"], "b")]]
+    out = _draw_table(OFF, UNITS, ["Mon"], cells, 80)
+    assert out[5] == "├───────┼────────┤"                     # box above the free period
+    assert out[8] == "├───────┼────────┤"                     # and below it
+    assert out[6] == "│ 08:45 │        │"
+
+
+def test_draw_table_no_boxes_after_the_last_lesson():
+    cells = [[(["A"], "a"), ([], None), ([], None)], [(["B"], "b"), (["C"], "c"), (["D"], "d")]]
+    out = _draw_table(OFF, UNITS, ["Mon", "Tue"], cells, 80)
+    assert out[5] == "├───────┼────────┼────────┤"            # closes the last lesson's box
+    assert out[8] == "├───────┤        ├────────┤"            # then the column stays open
+    assert out[9] == "│ 09:40 │        │ D      │"
+    assert out[-1] == "└───────┴────────┴────────┘"           # the bottom border closes it
+
+
+def test_draw_table_day_without_lessons_is_one_open_column():
+    cells = [[([], None), ([], None)], [(["A"], "a"), (["B"], "b")]]
     out = _draw_table(OFF, UNITS[:2], ["Mon", "Tue"], cells, 80)
-    assert out[5] == "├───────┼────────┤        │"
+    assert out[5] == "├───────┤        ├────────┤"
+
+
+def test_render_table_short_day_ends_open():
+    tt = {"time_grid": GRID, "days": [
+        {"date": MON, "entries": [_e(MON, "07:50", "08:40", "A")]},
+        {"date": TUE, "entries": [_e(TUE, "07:50", "08:40", "B"),
+                                  _e(TUE, "08:45", "09:35", "C"),
+                                  _e(TUE, "09:40", "10:30", "D")]}]}
+    out = body(_render_table(tt, OFF, width=80))
+    assert out[5] == "├───────┼────────────┼────────────┤"
+    assert out[8] == "├───────┤            ├────────────┤"
 
 
 def test_draw_table_junction_between_merged_and_split_columns():

@@ -513,7 +513,9 @@ def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
                 cells: list[list[tuple[list[str], Any]]], width: int) -> list[str]:
     """The bordered grid: a time column (start / end) and one column per
     day; `cells[c][i]` is (lines, key) of day c in period i. A body
-    line holds text per column, or None where a horizontal line runs."""
+    line holds text per column, or None where a horizontal line runs.
+    After a day's last lesson its column stays open down to the bottom
+    border (no empty boxes)."""
     widths = [_TIME_W] + _column_widths(heads, cells, width)
     n = len(units)
     cols: list[list[Optional[str]]] = [[]]
@@ -521,10 +523,13 @@ def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
         cols[0] += [start, st.dim(end)] + ([None] if i < n - 1 else [])
     for col in cells:
         lines: list[Optional[str]] = []
+        last = max((i for i, (_, key) in enumerate(col) if key is not None), default=-1)
         i = 0
         while i < n:
             content, key = col[i]
             j = i
+            if key is None and i > last:
+                j = n - 1                       # nothing comes anymore: no more boxes
             while key is not None and j + 1 < n and col[j + 1][1] == key:
                 j += 1                          # merge equal neighbours
             height = (j - i) * 3 + 2
