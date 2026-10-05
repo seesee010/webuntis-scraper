@@ -44,6 +44,7 @@ toi et écrit les fichiers de configuration. Pas besoin de modifier du JSON à l
 - Les **absences** et les **messages** non lus
 - `--now` pour savoir « quel cours j'ai en ce moment », avec un module [Waybar](https://github.com/Alexays/Waybar) prêt à l'emploi
 - `--changes --notify` pour des notifications de bureau à chaque changement (remplacement, annulation, nouveau devoir, …)
+- `--live` garde n'importe quelle vue ouverte et la rafraîchit toutes les quelques minutes
 - Une sortie **JSON** structurée à chaque exécution, si tu veux la traiter ailleurs
 
 <details>
@@ -328,6 +329,8 @@ untis --now                      # le cours actuel et le suivant
 untis --now --format waybar      # JSON pour un module personnalisé Waybar
 untis --changes                  # ce qui a changé depuis la dernière exécution de --changes
 untis --changes --notify         # … et en notifications de bureau
+untis --live                     # garder la vue -s ouverte, la redessiner toutes les 5 minutes
+untis --now --live 1m --max-age 10m   # cours actuel, rafraîchi chaque minute depuis le cache
 ```
 
 `--from` / `--to` acceptent tout ce que `--date` accepte, plus `today`, `tomorrow` et les jours de la semaine en anglais ou en allemand (`mon`, `monday`, `mo`, `montag`, …). Un jour de la semaine désigne celui de cette semaine ; si `--to` tombait alors avant `--from`, c'est celui de la semaine suivante.
@@ -387,6 +390,8 @@ cp contrib/systemd/untis-changes.* ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now untis-changes.timer
 ```
+
+`--live [INTERVAL]` laisse `untis` tourner et redessine la sortie toutes les INTERVAL (par défaut `5m`, au moins `60s` ; même format que `--max-age`) jusqu'à ce que vous appuyiez sur Ctrl-C. Cela fonctionne avec toutes les vues : `-s` (par défaut si vous n'en choisissez aucune), `--oneline`, `--table`, `--tests`, `--homework`, `--now` et `--start`/`--end`/`--free`. Un pied de page indique la dernière mise à jour et la prochaine. Si un rafraîchissement échoue (p. ex. pas de réseau), la dernière sortie reste affichée avec l'erreur en dessous ; les erreurs de configuration et de connexion arrêtent la boucle. Avec `--format json`/`waybar`, une ligne est affichée par rafraîchissement, qu'un module Waybar sans `interval` peut lire en continu. Combiné à `--max-age`, WebUntis n'est interrogé que si le cache est trop ancien. `--live` ne peut pas être combiné avec `--changes` (utilisez le minuteur systemd) ni être mis dans `default_args`.
 
 La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dans le
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y
