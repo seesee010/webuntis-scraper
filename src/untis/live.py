@@ -6,6 +6,7 @@ and how one refresh is drawn.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 
 from . import cache
@@ -23,6 +24,15 @@ def parse_interval(text: str) -> int:
     if seconds < MIN_INTERVAL:
         raise ValueError(f"interval must be at least {MIN_INTERVAL}s, got {text!r}")
     return seconds
+
+
+def color_mode(mode: str, isatty: bool, environ: Mapping[str, str]) -> str:
+    """--color for the captured refreshes: "auto" would look at the
+    capture buffer (never a terminal), so decide it once for the real
+    output instead. "always"/"never" stay as they are."""
+    if mode != "auto":
+        return mode
+    return "always" if isatty and "NO_COLOR" not in environ else "never"
 
 
 def format_interval(seconds: int) -> str:

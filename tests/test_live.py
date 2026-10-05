@@ -48,6 +48,19 @@ def test_format_interval(seconds, text):
     assert live.format_interval(seconds) == text
 
 
+# --- color_mode -------------------------------------------------------------
+@pytest.mark.parametrize("mode, isatty, env, want", [
+    ("auto", True, {}, "always"),
+    ("auto", False, {}, "never"),
+    ("auto", True, {"NO_COLOR": "1"}, "never"),
+    ("auto", True, {"NO_COLOR": ""}, "never"),       # set at all = no color
+    ("always", False, {"NO_COLOR": "1"}, "always"),  # explicit flag wins
+    ("never", True, {}, "never"),
+])
+def test_color_mode(mode, isatty, env, want):
+    assert live.color_mode(mode, isatty, env) == want
+
+
 # --- footer / frame ---------------------------------------------------------
 def test_footer_after_an_update():
     line = live.footer(datetime(2026, 10, 5, 9, 57, 30), 300, NOW)
@@ -153,7 +166,7 @@ async def _loop(monkeypatch, results, argv=("--live", "--now"), tty=True, rounds
     seen = []
 
     async def fake_async_main(args):
-        seen.append((args.clear_session, args.form_login))
+        seen.append((args.clear_session, args.form_login, args.color))
         r = results.pop(0)
         if isinstance(r, BaseException):
             raise r
@@ -225,7 +238,42 @@ async def test_loop_unexpected_error_is_retried(monkeypatch):
 async def test_loop_forces_new_session_only_once(monkeypatch):
     _, _, _, seen = await _loop(monkeypatch, ["a", "b"],
                                 argv=("--live", "--now", "--clear-session", "--form-login"))
-    assert seen == [(True, True), (False, False)]
+    assert [s[:2] for s in seen] == [(True, True), (False, False)]
+
+
+@pytest.mark.parametrize("tty, env, argv, want", [
+    (True, {}, (), "always"),                  # auto on a terminal: colors
+    (False, {}, (), "never"),                  # auto into a pipe: none
+    (True, {"NO_COLOR": "1"}, (), "never"),
+    (False, {}, ("--color", "always"), "always"),
+])
+async def test_loop_resolves_auto_color_for_the_real_output(monkeypatch, tty, env, argv, want):
+    # Regression: the refresh prints into a buffer, so "auto" used to
+    # look at that buffer and always disable colors.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    _, _, _, seen = await _loop(monkeypatch, ["a", "b"], argv=("--live", "-s", *argv), tty=tty)
+    assert [s[2] for s in seen] == [want, want]
+
+
+async def test_loop_colors_reach_the_screen(monkeypatch, tmp_path):
+    # End to end through the real _async_main: ANSI codes in the frame.
+    from untis.summary import resolve_color
+    got = []
+
+    async def fake_async_main(args):
+        got.append(resolve_color(args.color))
+        print("\033[1mMon\033[0m" if resolve_color(args.color) else "Mon")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(main_mod, "_async_main", fake_async_main)
+
+    async def no_sleep(_):
+        pass
+    out = FakeOut(True)
+    await main_mod._live_loop(parse(["--live"]), out=out, now=lambda: NOW,
+                              sleep=no_sleep, rounds=1)
+    assert got == [True] and "\033[1mMon" in out.getvalue()
 
 
 @pytest.mark.parametrize("fmt", ["json", "waybar"])

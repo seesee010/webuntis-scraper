@@ -592,6 +592,9 @@ async def _live_loop(args: argparse.Namespace, out=None, now=datetime.now,
     out = out or sys.stdout
     machine = args.format in ("json", "waybar")
     clear = not machine and out.isatty()
+    # Each refresh is printed into a buffer, so "--color auto" must be
+    # decided here, against the real output.
+    args.color = live.color_mode(args.color, out.isatty(), os.environ)
     body, updated, done = "", None, 0
     while True:
         buf, error = io.StringIO(), None
