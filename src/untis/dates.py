@@ -37,9 +37,10 @@ def parse_date(text: str, today: date) -> date:
 
 
 def week_range(today: date, offset: int = 0) -> tuple[date, date]:
-    """Monday..Sunday of the current week (offset=1: next week)."""
+    """Monday..Friday of the current week (offset=1: next week), the
+    same window as --from mon --to fri."""
     monday = today - timedelta(days=today.weekday()) + timedelta(weeks=offset)
-    return monday, monday + timedelta(days=6)
+    return monday, monday + timedelta(days=4)
 
 
 def active_spans(timetable: dict[str, Any]) -> dict[str, list[tuple[str, str]]]:

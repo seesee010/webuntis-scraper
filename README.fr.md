@@ -257,7 +257,7 @@ Les commandes du quotidien :
 untis                      # exécution par défaut (sans fenêtre, réutilise la session enregistrée)
 untis -s --today           # vue compacte pour aujourd'hui
 untis -s --next            # vue compacte pour le prochain jour de cours
-untis -s --week            # cette semaine, du lundi au dimanche
+untis -s --week            # cette semaine de cours, du lundi au vendredi (= --from mon --to fri)
 untis --now                # le cours actuel et le suivant
 untis --tests               # tous les contrôles / examens à venir
 untis --homework             # tous les devoirs non faits
@@ -300,7 +300,7 @@ untis -s --days-forward 4 --calendar-days  # compter en jours calendaires
 untis -s --today
 untis -s --tomorrow        # ou le prochain jour de cours si demain est libre
 untis -s --next            # aujourd'hui tant qu'il y a cours, sinon le prochain jour de cours
-untis -s --week            # cette semaine, du lundi au dimanche
+untis -s --week            # cette semaine de cours, du lundi au vendredi (= --from mon --to fri)
 untis -s --next-week
 untis -s --date 12.10.     # aussi 12.10.2026 ou 2026-10-12
 untis -s --from mon --to fri     # cette semaine de cours

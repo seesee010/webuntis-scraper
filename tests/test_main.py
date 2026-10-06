@@ -87,9 +87,9 @@ class TestDateShortcuts:
     def test_weeks(self, monkeypatch):
         from datetime import date
         cfg = self._cfg(monkeypatch, "--week")
-        assert (cfg.start_date, cfg.end_date) == (date(2026, 9, 28), date(2026, 10, 4))
+        assert (cfg.start_date, cfg.end_date) == (date(2026, 9, 28), date(2026, 10, 2))
         cfg = self._cfg(monkeypatch, "--next-week")
-        assert cfg.start_date == date(2026, 10, 5)
+        assert (cfg.start_date, cfg.end_date) == (date(2026, 10, 5), date(2026, 10, 9))
 
     def test_pick_modes(self, monkeypatch):
         assert self._cfg(monkeypatch, "--tomorrow").pick_day == "tomorrow"

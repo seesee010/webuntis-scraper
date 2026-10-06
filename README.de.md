@@ -254,7 +254,7 @@ Die Befehle für den Alltag:
 untis                      # Standard-Lauf (headless, gespeicherte Session wird wiederverwendet)
 untis -s --today           # kompakte Ansicht für heute
 untis -s --next            # kompakte Ansicht für den nächsten Schultag mit Unterricht
-untis -s --week            # diese Woche, Mo–So
+untis -s --week            # diese Schulwoche, Mo–Fr (= --from mon --to fri)
 untis --now                # die aktuelle und die nächste Stunde
 untis --tests               # alle kommenden Tests / Prüfungen
 untis --homework             # alle offenen Hausaufgaben
@@ -297,7 +297,7 @@ untis -s --days-forward 4 --calendar-days  # stattdessen Kalendertage zählen
 untis -s --today
 untis -s --tomorrow        # bzw. der nächste Schultag, wenn morgen frei ist
 untis -s --next            # heute, solange Schule ist, sonst der nächste Schultag
-untis -s --week            # diese Woche, Mo–So
+untis -s --week            # diese Schulwoche, Mo–Fr (= --from mon --to fri)
 untis -s --next-week
 untis -s --date 12.10.     # auch 12.10.2026 oder 2026-10-12
 untis -s --from mon --to fri     # diese Schulwoche

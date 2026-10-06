@@ -242,7 +242,7 @@ untis init --url URL --username NAME < password    # 用于脚本（密码从 st
 untis                      # 默认运行（无界面，重复使用已保存的会话）
 untis -s --today           # 今天的紧凑视图
 untis -s --next            # 下一个有课的上课日的紧凑视图
-untis -s --week            # 本周（周一到周日）
+untis -s --week            # 本周上课日（周一到周五，等同于 --from mon --to fri）
 untis --now                # 当前的课和下一节课
 untis --tests               # 所有即将到来的考试
 untis --homework             # 所有未完成的作业
@@ -284,7 +284,7 @@ untis -s --days-forward 4 --calendar-days  # 改为按日历天数计算
 untis -s --today
 untis -s --tomorrow        # 明天；如果明天没课，就是下一个上课日
 untis -s --next            # 今天还有课就显示今天，否则显示下一个上课日
-untis -s --week            # 本周（周一到周日）
+untis -s --week            # 本周上课日（周一到周五，等同于 --from mon --to fri）
 untis -s --next-week
 untis -s --date 12.10.     # 也可以写 12.10.2026 或 2026-10-12
 untis -s --from mon --to fri     # 本周的上课日

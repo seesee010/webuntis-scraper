@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from untis.dates import parse_date, pick_school_day, trim_timetable, week_range
+from untis.dates import parse_date, pick_school_day, resolve_from_to, trim_timetable, week_range
 
 FRI = date(2026, 10, 2)
 
@@ -32,10 +32,26 @@ def test_parse_date_rejects(text):
 
 
 def test_week_range():
-    assert week_range(FRI) == (date(2026, 9, 28), date(2026, 10, 4))
-    assert week_range(FRI, 1) == (date(2026, 10, 5), date(2026, 10, 11))
-    sunday = date(2026, 10, 4)
-    assert week_range(sunday)[0] == date(2026, 9, 28)
+    assert week_range(FRI) == (date(2026, 9, 28), date(2026, 10, 2))
+    assert week_range(FRI, 1) == (date(2026, 10, 5), date(2026, 10, 9))
+
+
+@pytest.mark.parametrize("offset", range(7))
+def test_week_range_same_for_every_day_of_the_week(offset):
+    # Mon 28.09. .. Sun 04.10.: the weekend still belongs to that week
+    assert week_range(date(2026, 9, 28) + timedelta(days=offset)) == (
+        date(2026, 9, 28), date(2026, 10, 2))
+
+
+@pytest.mark.parametrize("today", [date(2026, 9, 28), date(2026, 10, 1), date(2026, 10, 3),
+                                   date(2026, 10, 4)])
+def test_week_range_matches_from_mon_to_fri(today):
+    assert week_range(today) == resolve_from_to("mon", "fri", today)
+
+
+def test_week_range_across_year_end():
+    assert week_range(date(2026, 12, 31)) == (date(2026, 12, 28), date(2027, 1, 1))
+    assert week_range(date(2026, 12, 31), 1) == (date(2027, 1, 4), date(2027, 1, 8))
 
 
 def _tt(days: dict[str, list[tuple[str, str, dict]]]) -> dict:

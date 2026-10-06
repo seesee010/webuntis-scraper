@@ -249,7 +249,7 @@ The everyday commands:
 untis                      # default run (headless, reuses the saved session)
 untis -s --today           # compact view for today
 untis -s --next            # compact view for the next school day with lessons
-untis -s --week            # this week, Mon–Sun
+untis -s --week            # this school week, Mon–Fri (= --from mon --to fri)
 untis --now                # the current and the next lesson
 untis --tests               # all upcoming tests / exams
 untis --homework             # all open homework
@@ -292,7 +292,7 @@ untis -s --days-forward 4 --calendar-days  # count calendar days instead
 untis -s --today
 untis -s --tomorrow        # or the next school day if tomorrow is free
 untis -s --next            # today while school runs, else the next school day
-untis -s --week            # this week, Mon–Sun
+untis -s --week            # this school week, Mon–Fri (= --from mon --to fri)
 untis -s --next-week
 untis -s --date 12.10.     # also 12.10.2026 or 2026-10-12
 untis -s --from mon --to fri     # this school week

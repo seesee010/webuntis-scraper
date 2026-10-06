@@ -173,8 +173,8 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         "--next", action="store_true",
         help="Today while school isn't over yet, otherwise the next school day.",
     )
-    when.add_argument("--week", action="store_true", help="This week (Mon-Sun).")
-    when.add_argument("--next-week", action="store_true", help="Next week (Mon-Sun).")
+    when.add_argument("--week", action="store_true", help="This school week (Mon-Fri, like --from mon --to fri).")
+    when.add_argument("--next-week", action="store_true", help="Next school week (Mon-Fri).")
     when.add_argument(
         "--date", type=_date_arg, metavar="DATE",
         help="A specific day: YYYY-MM-DD, DD.MM.YYYY or DD.MM.",
