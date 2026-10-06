@@ -296,7 +296,12 @@ untis -s --max-age 10m           # 缓存不超过 10 分钟就使用，否则�
 # 同时保留 API 的原始数据
 untis --keep-raw -v
 
-# 在终端里显示简洁的每日视图（仍然会写入 JSON）
+# JSON 输出
+untis -s --no-json               # 只显示终端视图，不在 out/ 中写入文件
+untis --json - --days-forward 0 | jq '.timetable.days[0].entries[].subjects'
+untis --keep 5                   # 只保留最新的 5 个带时间戳的文件
+
+# 在终端里显示简洁的每日视图（仍然会写入 JSON，除非使用 --no-json）
 untis --short                   # 或 -s
 untis -s --days-forward 0       # 只看今天
 untis --oneline --week          # 每天一行
@@ -402,6 +407,8 @@ systemctl --user enable --now untis-changes.timer
 输出保存在数据目录（`~/.local/share/untis/` 或项目文件夹）中的 `out/untis_<timestamp>.json` 和
 `out/latest.json`。Cookie 保存在那里的 `sessions/storage_state.json` 中，这样以后运行时不需要
 重新登录。
+
+默认只保留最新的 20 个带时间戳的文件：可以用 `--keep N` 或 `config.json` 中的 `"keep_json": N` 修改，`0` 只写入 `latest.json`，`all` 从不删除。`--live` 只更新 `latest.json`。`--no-json` 完全不写入文件，`"write_json": false` 会把它设为默认（`--json` 可以在单次运行中重新开启）。`--json -` 把 JSON 输出到 stdout 而不是写入文件，例如可以交给 `jq` 处理。它会取代终端视图（来自 `default_args` 的 `-s`、`--table` 等会被忽略），并且可以与 `--tests`/`--homework`/`--absences` 以及 `--offline`/`--max-age` 一起使用。
 
 ### 退出码
 

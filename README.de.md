@@ -309,7 +309,12 @@ untis -s --max-age 10m           # Cache, wenn jünger als 10 min, sonst laden
 # Rohdaten der API zusätzlich behalten
 untis --keep-raw -v
 
-# Kompakte Tagesansicht im Terminal (JSON wird trotzdem geschrieben)
+# JSON-Ausgabe
+untis -s --no-json               # nur die Terminal-Ansicht, keine Dateien in out/
+untis --json - --days-forward 0 | jq '.timetable.days[0].entries[].subjects'
+untis --keep 5                   # nur die neuesten 5 Dateien mit Zeitstempel behalten
+
+# Kompakte Tagesansicht im Terminal (JSON wird trotzdem geschrieben, außer mit --no-json)
 untis --short                   # oder -s
 untis -s --days-forward 0       # nur heute
 untis --oneline --week          # eine Zeile pro Tag
@@ -418,6 +423,8 @@ Output landet in `out/untis_<timestamp>.json` sowie `out/latest.json`
 im Datenordner (`~/.local/share/untis/` bzw. Projektordner). In
 `sessions/storage_state.json` werden dort Cookies gespeichert, damit
 Folge-Läufe kein erneutes Login brauchen.
+
+Behalten werden nur die neuesten 20 Dateien mit Zeitstempel: `--keep N` oder `"keep_json": N` in `config.json` ändert das, `0` schreibt nur `latest.json`, `all` löscht nie. `--live` aktualisiert nur `latest.json`. `--no-json` schreibt gar keine Dateien, und `"write_json": false` macht das zum Standard (`--json` schaltet es für einen Lauf wieder ein). `--json -` gibt das JSON auf stdout aus, statt Dateien zu schreiben, z. B. um es an `jq` weiterzureichen. Es ersetzt die Terminal-Ansichten (`-s`, `--table`, … aus `default_args` fallen weg) und funktioniert mit `--tests`/`--homework`/`--absences` sowie mit `--offline`/`--max-age`.
 
 ### Exit-Codes
 
