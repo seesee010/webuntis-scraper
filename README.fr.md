@@ -312,7 +312,12 @@ untis -s --max-age 10m           # cache s'il a moins de 10 min, sinon charger
 # Conserver aussi les données brutes de l'API
 untis --keep-raw -v
 
-# Vue compacte par jour dans le terminal (le JSON est quand même écrit)
+# Sortie JSON
+untis -s --no-json               # seulement la vue dans le terminal, aucun fichier dans out/
+untis --json - --days-forward 0 | jq '.timetable.days[0].entries[].subjects'
+untis --keep 5                   # ne garder que les 5 fichiers horodatés les plus récents
+
+# Vue compacte par jour dans le terminal (le JSON est quand même écrit, sauf avec --no-json)
 untis --short                   # ou -s
 untis -s --days-forward 0       # seulement aujourd'hui
 untis --oneline --week          # une ligne par jour
@@ -421,6 +426,8 @@ La sortie est écrite dans `out/untis_<timestamp>.json` et `out/latest.json` dan
 dossier de données (`~/.local/share/untis/`, ou le dossier du projet). Les cookies y
 sont enregistrés dans `sessions/storage_state.json`, pour que les exécutions suivantes
 n'aient pas besoin de se reconnecter.
+
+Seuls les 20 fichiers horodatés les plus récents sont gardés : `--keep N` ou `"keep_json": N` dans `config.json` change cela, `0` n'écrit que `latest.json`, `all` ne supprime jamais rien. `--live` ne met à jour que `latest.json`. `--no-json` n'écrit aucun fichier, et `"write_json": false` en fait le comportement par défaut (`--json` le réactive pour une exécution). `--json -` affiche le JSON sur stdout au lieu d'écrire des fichiers, par ex. pour le passer à `jq`. Il remplace les vues du terminal (`-s`, `--table`, … venant de `default_args` sont ignorées) et fonctionne avec `--tests`/`--homework`/`--absences` ainsi qu'avec `--offline`/`--max-age`.
 
 ### Codes de sortie
 

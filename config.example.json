@@ -16,5 +16,7 @@
   "timezone": "Europe/Berlin",
   "output_dir": "out",
   "pretty_json": true,
-  "include_raw": false
+  "include_raw": false,
+  "write_json": true,
+  "keep_json": 20
 }

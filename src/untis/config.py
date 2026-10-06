@@ -63,6 +63,23 @@ CHANGES_PATH = STATE_DIR / "changes.json"
 
 
 TRANSPORTS = ("auto", "http", "browser")
+DEFAULT_KEEP_JSON = 20
+
+
+def parse_keep(value: Any) -> int | None:
+    """A "keep the last N JSON files" value: a whole number >= 0 (0: only
+    latest.json) or "all" (never delete). Raises ValueError otherwise."""
+    if isinstance(value, str) and value.strip().lower() == "all":
+        return None
+    if isinstance(value, int) and not isinstance(value, bool):
+        n = value
+    elif isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        n = int(value)
+    else:
+        raise ValueError(f"must be a number or 'all', not {value!r}")
+    if n < 0:
+        raise ValueError(f"must be 0 or more, not {n}")
+    return n
 
 
 class ConfigError(ValueError):
@@ -131,6 +148,9 @@ class ScraperConfig:
     output_dir: str = str(OUT_DIR)
     pretty_json: bool = True
     include_raw: bool = False      # dump raw API responses
+    write_json: bool = True        # False: no files in output_dir by default (--json)
+    # How many timestamped untis_*.json files to keep; None = all.
+    keep_json: int | None = DEFAULT_KEEP_JSON
 
     # Storage state for session reuse
     storage_state_path: str = str(
@@ -223,7 +243,7 @@ def load_config(
             "headless", "pretty_json", "include_raw",
             "scrape_timetable", "scrape_exams", "scrape_homework",
             "scrape_absences", "scrape_messages", "calendar_days",
-            "browser_no_sandbox",
+            "browser_no_sandbox", "write_json",
         }:
             current = getattr(cfg, field_name, False)
             setattr(cfg, field_name, _coerce_bool(v, current))
@@ -235,6 +255,12 @@ def load_config(
             except (TypeError, ValueError):
                 log.warning("Config key %s=%r is not an int, ignoring", k, v)
                 continue
+        if field_name == "keep_json":
+            try:
+                cfg.keep_json = parse_keep(v)
+            except ValueError as exc:
+                raise ConfigError(f"keep_json {exc}") from None
+            continue
         if hasattr(cfg, field_name):
             setattr(cfg, field_name, v)
         else:

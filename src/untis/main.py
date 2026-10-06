@@ -21,10 +21,10 @@ from .browser import BrowserSession
 from .config import (
     CACHE_PATH,
     CHANGES_PATH,
-    DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, ConfigError, load_config,
+    DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, ConfigError, load_config, parse_keep,
 )
 from .dates import parse_date, parse_day_spec, resolve_from_to, week_range
-from .exporter import write_json, write_latest
+from .exporter import dump_json, export
 from .scraper import Scraper
 from .summary import (
     render_homework, render_legend, render_summary, render_tests, resolve_color,
@@ -62,6 +62,10 @@ WINDOW_DESTS = ("today", "tomorrow", "next", "week", "next_week", "date",
 # These make no sense as defaults (they decide where defaults come from,
 # or print something and exit).
 NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version", "--live")
+# Options with their own output, which "--json -" replaces: from
+# default_args they are dropped, given explicitly they are an error.
+JSON_STDOUT_CONFLICTS = ("short", "oneline", "table", "legend", "now",
+                         "start_q", "end_q", "free_q", "changes", "notify")
 
 
 class DefaultArgsError(Exception):
@@ -129,6 +133,21 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         help="Include raw API payloads in the output JSON.",
     )
     ap.add_argument(
+        "--json", nargs="?", const=True, type=_json_target_arg, **dflt(None), metavar="-",
+        help="Write out/untis_<timestamp>.json and out/latest.json (the default, "
+             "unless \"write_json\": false in config.json). '--json -' prints the "
+             "JSON to stdout instead of writing files, e.g. for jq.",
+    )
+    ap.add_argument(
+        "--no-json", dest="json", action="store_const", const=False,
+        help="Don't write any JSON files.",
+    )
+    ap.add_argument(
+        "--keep", type=_keep_arg, **dflt(None), metavar="N",
+        help="Only keep the newest N out/untis_<timestamp>.json files; 0 writes "
+             "only latest.json, 'all' never deletes (default from config: 20).",
+    )
+    ap.add_argument(
         "--days-back", type=_non_negative_int, **dflt(None), metavar="N",
         help="Also show the previous N school days (default from config: 0).",
     )
@@ -172,7 +191,7 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
     )
     ap.add_argument(
         "-s", "--short", action=argparse.BooleanOptionalAction, **dflt(False),
-        help="Print a compact per-day overview (JSON is still written).",
+        help="Print a compact per-day overview (JSON is still written, unless --no-json).",
     )
     ask = ap.add_argument_group(
         "questions", "Answer one question about a day (DAY: today (default), "
@@ -320,6 +339,14 @@ def _parse_args(
         for dest in WINDOW_DESTS:
             merged[dest] = plain[dest]
     merged.update(explicit)
+    if merged["json"] == "-":
+        given = [d for d in JSON_STDOUT_CONFLICTS if explicit.get(d) not in (None, False)]
+        if given or "live" in explicit:
+            ap.error("--json - can't be combined with -s, --oneline, --table, --legend, "
+                     "--start/--end/--free, --now, --changes or --live")
+        plain = vars(ap.parse_args([]))
+        for dest in JSON_STDOUT_CONFLICTS:
+            merged[dest] = plain[dest]
     args = argparse.Namespace(**merged)
     args.default_args, args.defaults_source = default_args, source
 
@@ -402,6 +429,24 @@ def _live_interval_arg(text: str) -> int:
         raise argparse.ArgumentTypeError(str(exc)) from None
 
 
+def _json_target_arg(text: str) -> str:
+    """argparse type for --json's optional value: only "-" (stdout)."""
+    if text != "-":
+        raise argparse.ArgumentTypeError(
+            f"only '-' (stdout) is supported, not {text!r}; files always go to output_dir")
+    return text
+
+
+def _keep_arg(text: str) -> int | str:
+    """argparse type for --keep: a number, or "all" as is (None would
+    look like "not given")."""
+    try:
+        n = parse_keep(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+    return "all" if n is None else n
+
+
 def _query_day_arg(text: str) -> str:
     """argparse type for --start/--end/--free DAY (syntax check only)."""
     try:
@@ -457,6 +502,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         cfg.days_forward = args.days_forward
     if args.calendar_days:
         cfg.calendar_days = True
+    if args.keep is not None:
+        cfg.keep_json = parse_keep(args.keep)
     today, now = date.today(), datetime.now()
     _apply_date_shortcuts(cfg, args, today)
     if args.query:
@@ -469,9 +516,14 @@ async def _async_main(args: argparse.Namespace) -> int:
         _only_sections(cfg, args)
 
     payload, fetched = await _get_payload(cfg, args, today, now)
-    if fetched:
-        write_json(payload, cfg.output_dir, pretty=cfg.pretty_json, keep_raw=cfg.include_raw)
-        write_latest(payload, cfg.output_dir, keep_raw=cfg.include_raw)
+    if args.json == "-":
+        print(dump_json(payload, pretty=cfg.pretty_json, keep_raw=cfg.include_raw))
+        return 0
+    if fetched and (cfg.write_json if args.json is None else args.json):
+        # --live would write a file every refresh: only latest.json there.
+        keep = 0 if args.live is not None else cfg.keep_json
+        export(payload, cfg.output_dir, pretty=cfg.pretty_json,
+               keep_raw=cfg.include_raw, keep=keep)
     color = resolve_color(args.color)
     layout = _layout(args)
     if args.sections:
@@ -699,8 +751,8 @@ def main() -> int:
         print(render_legend(resolve_color(args.color)))
         return 0
     _setup_logging(args.verbose,
-                   quiet=bool(_layout(args) or args.query or args.sections
-                              or args.now or args.changes or args.live is not None))
+                   quiet=bool(_layout(args) or args.query or args.sections or args.now
+                              or args.changes or args.live is not None or args.json == "-"))
     if args.default_args:
         logging.getLogger(__name__).debug(
             "default_args from %s: %s", args.defaults_source, " ".join(args.default_args))
