@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import stat
+import sys
 from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -157,6 +158,52 @@ def test_slice_payload_trims_everything_and_marks_cached():
 
 def test_slice_payload_without_note():
     assert "note" not in slice_payload(payload(), FRI, FRI, "", "x")["meta"]["window"]
+
+
+@pytest.mark.parametrize("max_age", [None, 600])
+@pytest.mark.parametrize("by_due_date, expected", [(True, [1, 3, 4, 6, 7]),
+                                                 (False, [2, 3, 4, 6, 7])])
+def test_cached_homework_uses_requested_date_mode(max_age, by_due_date, expected):
+    day = date(2026, 10, 6)
+    items = [
+        {"id": 1, "date": "2026-10-02", "due_date": "2026-10-06"},
+        {"id": 2, "date": "2026-10-06", "due_date": "2026-10-09"},
+        {"id": 3, "date": "2026-10-06", "due_date": None},
+        {"id": 4, "date": "2026-10-06", "due_date": "2026-10-06"},
+        {"id": 5, "date": "2026-10-02", "due_date": "2026-10-09"},
+        {"id": 6, "date": "2026-10-06"},
+        {"id": 7, "due_date": "2026-10-06"},
+        {"id": 8},
+    ]
+    p = payload(homework={"items": items})
+    out = from_cache(cfg(start_date=day, homework_by_due_date=by_due_date),
+                     entry(p), FRI, NOW, max_age=max_age)
+    assert [h["id"] for h in out["homework"]["items"]] == expected
+    assert p["homework"]["items"] == items
+
+
+@pytest.mark.parametrize("mode", [["--offline"], ["--max-age", "1h"]])
+def test_cli_cached_homework_filters_by_due_date(monkeypatch, tmp_path, capsys, mode):
+    c = cfg(output_dir=str(tmp_path / "out"))
+    monkeypatch.setattr(main_mod, "load_config", lambda *a: c)
+    monkeypatch.setattr(main_mod, "CACHE_PATH", tmp_path / "last.json")
+    p = payload(homework={"items": [
+        {"id": 1, "date": "2026-10-02", "due_date": "2026-10-06"},
+        {"id": 2, "date": "2026-10-06", "due_date": "2026-10-09"},
+        {"id": 3, "date": "2026-10-06", "due_date": None},
+    ]})
+    cache.save(main_mod.CACHE_PATH, p, c, datetime.now())
+    fetch = AsyncMock(side_effect=AssertionError("cache hit must not fetch"))
+    monkeypatch.setattr(main_mod, "_fetch", fetch)
+    monkeypatch.delenv("UNTIS_DEFAULT_ARGS", raising=False)
+    monkeypatch.setattr(sys, "argv", ["untis", "--config", str(tmp_path / "config.json"),
+                                     "--homework", "--date", "2026-10-06", "--json", "-", *mode])
+    assert main_mod.main() == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [h["id"] for h in out["homework"]["items"]] == [1, 3]
+    assert out["meta"]["cached_at"]
+    fetch.assert_not_awaited()
+    assert not (tmp_path / "out").exists()
 
 
 # --- from_cache --------------------------------------------------------------
