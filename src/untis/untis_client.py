@@ -629,6 +629,15 @@ class WebUntisClient:
                     own.add(name)
         return own
 
+    async def get_filter(self, resource_type: str) -> dict[str, Any]:
+        """The /timetable/filter lists for a resource type (ROOM, CLASS, …):
+        rooms, classes with their class teachers, … as far as the account
+        may see them (students get 403 for TEACHER and SUBJECT)."""
+        return await self._rest_get("/timetable/filter", {
+            "resourceType": resource_type,
+            "timetableType": "STANDARD",
+        })
+
     async def get_timetable(self, start: date, end: date) -> list[dict]:
         """Timetable from JSON-RPC `getTimetable` (fallback path)."""
         pid, ptype = self._require_person()

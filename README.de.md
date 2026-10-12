@@ -350,6 +350,8 @@ untis -H --days-forward 5        # Hausaufgaben, die in den nächsten 5 Schultag
 untis -t -H                      # beide Abschnitte
 untis -s --week --only MATH      # nur Mathe-Stunden diese Woche
 untis -s --lang de               # die Tagesansicht auf Deutsch (Mo 05.10. … entfällt)
+untis -s --long                  # volle Namen von Fach, Lehrer und Raum
+untis --who TCH1                 # wofür steht ein Kürzel?
 untis -t -H --except REL,ETH     # Tests und Hausübungen ohne REL und ETH
 untis --absences                 # Abwesenheiten dieses Schuljahrs, mit Summen
 untis -A --days-back 10 --days-forward 0   # Abwesenheiten der letzten 10 Schultage
@@ -429,6 +431,8 @@ $ untis --table --from mon --to tue
 
 `--lang de` zeigt die Tagesansicht, `--oneline`, `--table` und `--legend` auf Deutsch: Wochentage (`Mo`, `Di`, …), Status (`entfällt`, `ausgetragen`, `kein Lehrer`, `geändert`, `Prüfung`, `Veranstaltung`, `Supplierung`) und die übrigen Texte dort. `"language": "de"` in `config.json` macht das zur Voreinstellung; `"auto"` nimmt die Sprache von `"locale"` (`de-AT` → Deutsch, alles andere Englisch). Standard bleibt Englisch (`en`). Die anderen Ansichten (`--tests`, `--homework`, `--absences`, `--now`, …) sind noch englisch.
 
+`--long` zeigt volle Namen statt der Kürzel (`Mathematik` statt `MATH`, die Raumbeschreibung statt `R101`), auch bei Vertretungen (`(for …)`), in der Tagesansicht, `--oneline`, `--table`, `--tests` und `--homework`; die JSON-Dateien behalten beides. `--who KÜRZEL` sagt, wofür ein Kürzel steht, z. B. `TCH1   teacher   Fullname` oder `R101   room   Classroom, building T`. Es sucht zuerst in den zwischengespeicherten Daten (ohne Netzwerk) und sonst in den Raum- und Klassenlisten der Schule (mit den Klassenvorständen) und im Stundenplan dieser Woche; mit `--offline` nur im Cache. Ein voller Name geht auch (`--who mathematik`), ab 3 Buchstaben auch ein Teil davon. Exit-Code `6`, wenn nichts passt.
+
 `--now` zeigt die gerade laufende Stunde (mit Restzeit) und die nächste; nach Schulschluss oder am Wochenende die erste Stunde des nächsten Schultags. `--format json` gibt dasselbe als Daten aus, `--format waybar` das JSON, das ein [Waybar](https://github.com/Alexays/Waybar)-Custom-Modul erwartet (`text`, `tooltip`, `class`, wobei `class` der Status der Stunde oder `idle` ist). `--idle-empty` gibt zwischen den Stunden nichts aus, damit sich das Modul ausblendet. Mit `--max-age` wird die Leiste aus dem Cache gefüttert, statt WebUntis jede Minute abzufragen:
 
 ```jsonc
@@ -470,6 +474,7 @@ mit `-v` gibt es den vollen Traceback.
 | `3` | Login fehlgeschlagen |
 | `4` | WebUntis nicht erreichbar oder Fehler vom Server |
 | `5` | `--start` / `--end` / `--free`: an dem Tag keine Schule (gibt `-` aus) |
+| `6` | `--who`: kein Fach, Lehrer, Raum oder keine Klasse mit diesem Kürzel |
 | `10` | `--changes`: seit dem letzten Lauf hat sich etwas geändert |
 | `130` | mit Strg-C abgebrochen |
 

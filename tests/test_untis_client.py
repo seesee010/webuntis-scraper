@@ -384,6 +384,18 @@ class TestDataFetchers:
         assert all(p["token"] == "tok" for p in seen)
         assert seen[0]["params"]["resources"] == "12345"
 
+    async def test_get_filter(self, client: WebUntisClient, fake_page: MagicMock):
+        client._token = "tok"
+        seen = []
+        async def evaluate(js, payload):
+            seen.append(payload)
+            return {"status": 200, "ok": True, "raw": "{}", "data": {"rooms": []}}
+        fake_page.evaluate = evaluate
+        assert await client.get_filter("ROOM") == {"rooms": []}
+        assert seen[0]["url"].endswith("/api/rest/view/v1/timetable/filter")
+        assert seen[0]["params"] == {"resourceType": "ROOM", "timetableType": "STANDARD"}
+        assert seen[0]["token"] == "tok"
+
     async def test_exams_raises_on_http_error(
         self, client: WebUntisClient, fake_page: MagicMock,
     ):
