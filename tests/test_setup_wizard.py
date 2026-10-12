@@ -24,6 +24,14 @@ from untis.setup_wizard import (
 )
 from untis.untis_client import LoginError, WebUntisError
 
+@pytest.fixture(autouse=True)
+def _no_live_picker(monkeypatch):
+    """The live school search only runs on a real terminal; keep it out
+    of these tests even under `pytest -s` (tests pass `pick` explicitly)."""
+    from untis import school_picker
+    monkeypatch.setattr(school_picker, "available", lambda *a: False)
+
+
 SCHOOL = {"server": "demo.webuntis.com", "loginName": "demo-school",
           "displayName": "Demo School", "address": "1234 Town"}
 
@@ -140,7 +148,8 @@ class Tty(io.StringIO):
         return True
 
 
-def run(tmp_path, argv, answers=(), password="s3cret", stdin=None, search=None, verify=None):
+def run(tmp_path, argv, answers=(), password="s3cret", stdin=None, search=None, verify=None,
+        pick=None):
     out, asked = [], list(answers)
     calls = {}
 
@@ -155,6 +164,7 @@ def run(tmp_path, argv, answers=(), password="s3cret", stdin=None, search=None, 
         out=out.append,
         search=search or (lambda term: [SCHOOL]),
         verify=verify or fake_verify,
+        pick=pick,
     )
     return code, "\n".join(out), calls
 
@@ -276,3 +286,70 @@ def test_main_dispatches_init(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["untis", "init", "--url", "x"])
     main_mod.main()
     assert seen["argv"] == ["--url", "x"]
+
+
+# --- live school search (#76) --------------------------------------------------
+def test_school_target():
+    assert sw.school_target(SCHOOL) == ("demo", "demo-school")
+    with pytest.raises(SetupError, match="unexpected server"):
+        sw.school_target({"server": "example.org", "loginName": "x"})
+
+
+def _picker(result, seen=None):
+    def pick(search, query=""):
+        if seen is not None:
+            seen.append(query)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+    return pick
+
+
+def test_live_search_picks_the_school(tmp_path):
+    seen = []
+    code, out, calls = run(tmp_path, [], answers=["max"],
+                           pick=_picker(("school", SCHOOL), seen))
+    assert code == 0 and seen == [""]
+    assert "Type the name or town of your school" in out
+    assert calls["verify"] == ("demo", "demo-school", "max", "s3cret")
+
+
+def test_live_search_accepts_a_pasted_url(tmp_path):
+    code, out, calls = run(tmp_path, [], answers=["max"], pick=_picker(("url", URL)))
+    assert code == 0 and calls["verify"][:2] == ("demo", "demo-school")
+
+
+def test_live_search_url_without_school_still_resolves(tmp_path):
+    code, out, calls = run(tmp_path, [], answers=["max"],
+                           pick=_picker(("url", "https://demo.webuntis.com/today")))
+    assert code == 0 and calls["verify"][:2] == ("demo", "demo-school")
+
+
+def test_search_flag_prefills_the_live_search(tmp_path):
+    seen = []
+    code, out, _ = run(tmp_path, ["--search", "demo"], answers=["max"],
+                       pick=_picker(("school", SCHOOL), seen))
+    assert code == 0 and seen == ["demo"]
+    assert "Type the name" not in out
+
+
+@pytest.mark.parametrize("argv", [["--url", URL], ["--search", "demo", "--username", "max"]])
+def test_no_live_search_when_nothing_to_choose(tmp_path, argv):
+    seen = []
+    code, _, _ = run(tmp_path, argv, answers=["max"], stdin=io.StringIO("s3cret\n"),
+                     pick=_picker(("school", {}), seen))
+    assert code == 0 and seen == []
+
+
+def test_live_search_cancelled(tmp_path):
+    code, out, _ = run(tmp_path, [], pick=_picker(KeyboardInterrupt()))
+    assert code == 130 and "nothing was saved" in out
+    assert not (tmp_path / "config.json").exists()
+
+
+def test_live_search_is_the_default_on_a_terminal(tmp_path, monkeypatch):
+    from untis import school_picker
+    monkeypatch.setattr(school_picker, "available", lambda *a: True)
+    monkeypatch.setattr(school_picker, "pick", _picker(("school", SCHOOL)))
+    code, _, calls = run(tmp_path, [], answers=["max"])
+    assert code == 0 and calls["verify"][:2] == ("demo", "demo-school")

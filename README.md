@@ -195,10 +195,12 @@ login, and writes `config.json` and `.env` for you (mode `600`). Existing files 
 not replaced, and the password is never shown. For 2FA/SSO accounts, add `--no-verify`.
 
 ```bash
-untis init                                         # interactive: school URL, username, password, login test
-untis init --search "School name"                  # find the school by name instead
+untis init                                         # interactive: find your school while typing, username, password, login test
+untis init --search "School name"                  # start the live search with this name
 untis init --url URL --username NAME < password    # for scripts (password from stdin)
 ```
+
+On a terminal, `untis init` finds your school while you type, like fzf: after a short pause the public WebUntis school search runs, the matches are listed below the input, ↑/↓ (or Ctrl-P/Ctrl-N) picks one, Enter takes it, Esc cancels. Very short names ("h", "htl") match too many schools for the search, so it says "keep typing" until the list is short enough; adding the town helps ("gymnasium graz"). A WebUntis URL can be pasted into the same field. Without a terminal (piped input, Windows) it asks for the URL as before.
 
 Config files live in `~/.config/untis/` (or `$XDG_CONFIG_HOME/untis/`). Sessions, output and
 debug screenshots then go to `~/.local/share/untis/`, so `untis` works from any directory.

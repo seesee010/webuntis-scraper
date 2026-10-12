@@ -199,10 +199,12 @@ Dateien werden aktualisiert, nicht ersetzt, und das Passwort wird nie angezeigt.
 2FA/SSO-Accounts `--no-verify` anhängen.
 
 ```bash
-untis init                                         # interaktiv: Schul-URL, Benutzername, Passwort, Login-Test
-untis init --search "School name"                  # Schule stattdessen per Name suchen
+untis init                                         # interaktiv: Schule beim Tippen finden, Benutzername, Passwort, Login-Test
+untis init --search "School name"                  # die Live-Suche mit diesem Namen starten
 untis init --url URL --username NAME < password    # für Skripte (Passwort über stdin)
 ```
+
+Im Terminal findet `untis init` deine Schule schon beim Tippen, wie fzf: Nach einer kurzen Pause läuft die öffentliche WebUntis-Schulsuche, die Treffer stehen unter der Eingabe, ↑/↓ (oder Strg-P/Strg-N) wählt einen aus, Enter übernimmt ihn, Esc bricht ab. Sehr kurze Namen ("h", "htl") passen für die Suche auf zu viele Schulen, dann steht dort "weitertippen", bis die Liste kurz genug ist; der Ort hilft ("gymnasium graz"). Eine WebUntis-URL kann ins selbe Feld eingefügt werden. Ohne Terminal (Eingabe über eine Pipe, Windows) wird wie bisher nach der URL gefragt.
 
 Die Config wird in `~/.config/untis/` (bzw. `$XDG_CONFIG_HOME/untis/`) gesucht. Sessions,
 Output und Debug-Screenshots landen dann in `~/.local/share/untis/` — `untis` funktioniert so

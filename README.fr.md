@@ -202,10 +202,12 @@ fichiers existants sont mis à jour, pas remplacés, et le mot de passe n'est ja
 Pour les comptes 2FA/SSO, ajoute `--no-verify`.
 
 ```bash
-untis init                                         # interactif : URL de l'école, identifiant, mot de passe, test de connexion
-untis init --search "School name"                  # chercher l'école par son nom
+untis init                                         # interactif : trouver l'école en tapant, identifiant, mot de passe, test de connexion
+untis init --search "School name"                  # lancer la recherche en direct avec ce nom
 untis init --url URL --username NAME < password    # pour les scripts (mot de passe via stdin)
 ```
+
+Dans un terminal, `untis init` trouve ton école pendant que tu tapes, comme fzf : après une courte pause, la recherche publique d'écoles WebUntis est lancée, les résultats s'affichent sous la saisie, ↑/↓ (ou Ctrl-P/Ctrl-N) en choisit un, Entrée le prend, Échap annule. Les noms très courts ("h", "htl") correspondent à trop d'écoles pour la recherche ; elle indique alors de continuer à taper jusqu'à ce que la liste soit assez courte ; ajouter la ville aide ("gymnasium graz"). Une URL WebUntis peut être collée dans le même champ. Sans terminal (entrée via un pipe, Windows), l'URL est demandée comme avant.
 
 Les fichiers de configuration sont cherchés dans `~/.config/untis/` (ou
 `$XDG_CONFIG_HOME/untis/`). Les sessions, les fichiers de sortie et les captures d'écran
