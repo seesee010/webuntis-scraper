@@ -63,6 +63,21 @@ CHANGES_PATH = STATE_DIR / "changes.json"
 
 
 TRANSPORTS = ("auto", "http", "browser")
+# --lang / "language": languages of the day view ("auto": from `locale`).
+VIEW_LANGUAGES = ("en", "de")
+
+
+def resolve_language(value: Any, locale: str = "") -> str:
+    """A "language"/--lang value -> "en" or "de". "auto" takes the
+    language of `locale` ("de-AT" -> "de"), English if it has none.
+    Raises ValueError for anything else."""
+    text = str(value or "en").strip().lower()
+    if text == "auto":
+        lang = (locale or "").replace("_", "-").split("-")[0].lower()
+        return lang if lang in VIEW_LANGUAGES else "en"
+    if text not in VIEW_LANGUAGES:
+        raise ValueError(f"must be one of {', '.join(VIEW_LANGUAGES)} or auto, not {value!r}")
+    return text
 DEFAULT_KEEP_JSON = 20
 
 
@@ -131,6 +146,8 @@ class ScraperConfig:
     browser_no_sandbox: bool = False
     # CLI arguments applied on every run (read by main.py before parsing).
     default_args: Any = None
+    # Language of the day view: "en" (default), "de", or "auto" (from locale)
+    language: str = "en"
 
     # Browser behaviour
     headless: bool = True
@@ -274,6 +291,11 @@ def load_config(
     for key in ("days_back", "days_forward"):
         if getattr(cfg, key) < 0:
             raise ConfigError(f"{key} must be 0 or more, not {getattr(cfg, key)}")
+
+    try:
+        cfg.language = resolve_language(cfg.language, cfg.locale)
+    except ValueError as exc:
+        raise ConfigError(f"language {exc}") from None
 
     if cfg.transport not in TRANSPORTS:
         raise ConfigError(

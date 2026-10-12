@@ -331,6 +331,7 @@ untis --homework                 # alle Hausaufgaben dieses Schuljahrs
 untis -H --days-forward 5        # Hausaufgaben, die in den nächsten 5 Schultagen fällig sind
 untis -t -H                      # beide Abschnitte
 untis -s --week --only MATH      # nur Mathe-Stunden diese Woche
+untis -s --lang de               # die Tagesansicht auf Deutsch (Mo 05.10. … entfällt)
 untis -t -H --except REL,ETH     # Tests und Hausübungen ohne REL und ETH
 untis --absences                 # Abwesenheiten dieses Schuljahrs, mit Summen
 untis -A --days-back 10 --days-forward 0   # Abwesenheiten der letzten 10 Schultage
@@ -407,6 +408,8 @@ $ untis --table --from mon --to tue
 `--holidays` zeigt die kommenden Ferien mit Countdown: Datum, Tage bis zum Beginn und wie viele Schultage (Montag bis Freitag, heute mitgezählt, Ferientage nicht) bis dahin noch übrig sind. Ferien, die aneinander grenzen (z. B. ein einzelner freier Tag direkt vor den Herbstferien oder ein Feiertag mitten darin, auch über ein Wochenende hinweg), werden als ein Block gezeigt, benannt nach dem längsten Teil; laufende Ferien sind gelb. `--holidays --next` gibt nur einen Satz über die nächsten Ferien aus. Die Daten kommen mit dem Login (`/app/data`), es gibt also keine zusätzliche Anfrage; der Zeitraum gilt hier nicht. Kombinierbar mit `--tests`, `--homework` und `--absences` (dann ist `--next` deren Zeitraum). `"scrape_holidays": true` in `config.json` nimmt die Ferien in jede JSON-Ausgabe auf.
 
 `--only FACH` zeigt nur diese Fächer, `--except FACH` blendet sie aus: in der Tagesansicht, `--oneline`, `--table`, `--tests`, `--homework` und `--json -`. Ein Fach passt über seinen Kurz- oder Langnamen (`MATH` oder `mathematics`), ohne auf Groß-/Kleinschreibung zu achten; mehrere werden mit Kommas getrennt (`--only MATH,ENG`) oder als wiederholte Optionen angegeben. Veranstaltungen haben kein Fach: `--only` blendet sie aus, `--except` behält sie. Abwesenheiten haben kein Fach und werden nicht gefiltert. Die JSON-Dateien und der Cache behalten immer alles, ein Filter versteckt also nie Daten vor dem nächsten Lauf. Nicht verfügbar mit `--start`/`--end`/`--free`, `--now` und `--changes`.
+
+`--lang de` zeigt die Tagesansicht, `--oneline`, `--table` und `--legend` auf Deutsch: Wochentage (`Mo`, `Di`, …), Status (`entfällt`, `ausgetragen`, `kein Lehrer`, `geändert`, `Prüfung`, `Veranstaltung`, `Supplierung`) und die übrigen Texte dort. `"language": "de"` in `config.json` macht das zur Voreinstellung; `"auto"` nimmt die Sprache von `"locale"` (`de-AT` → Deutsch, alles andere Englisch). Standard bleibt Englisch (`en`). Die anderen Ansichten (`--tests`, `--homework`, `--absences`, `--now`, …) sind noch englisch.
 
 `--now` zeigt die gerade laufende Stunde (mit Restzeit) und die nächste; nach Schulschluss oder am Wochenende die erste Stunde des nächsten Schultags. `--format json` gibt dasselbe als Daten aus, `--format waybar` das JSON, das ein [Waybar](https://github.com/Alexays/Waybar)-Custom-Modul erwartet (`text`, `tooltip`, `class`, wobei `class` der Status der Stunde oder `idle` ist). `--idle-empty` gibt zwischen den Stunden nichts aus, damit sich das Modul ausblendet. Mit `--max-age` wird die Leiste aus dem Cache gefüttert, statt WebUntis jede Minute abzufragen:
 

@@ -21,7 +21,8 @@ from .browser import BrowserSession
 from .config import (
     CACHE_PATH,
     CHANGES_PATH,
-    DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, ConfigError, load_config, parse_keep,
+    DEFAULT_CONFIG_PATH, DEFAULT_ENV_PATH, TRANSPORTS, VIEW_LANGUAGES, ConfigError, _load_json,
+    ScraperConfig, load_config, parse_keep, resolve_language,
 )
 from .dates import parse_date, parse_day_spec, resolve_from_to, week_range
 from .exporter import dump_json, export
@@ -283,6 +284,11 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         "--color", choices=("auto", "always", "never"), **dflt("auto"),
         help="Colors in the day view: 'auto' (default: only on a terminal, "
              "respects NO_COLOR), 'always' (e.g. for less -R) or 'never'.",
+    )
+    ap.add_argument(
+        "--lang", choices=VIEW_LANGUAGES, **dflt(None),
+        help="Language of the day view, --oneline, --table and --legend (status labels, "
+             "weekday names). Default: \"language\" in config.json, else en.",
     )
     ap.add_argument(
         "--legend", action=argparse.BooleanOptionalAction, **dflt(False),
@@ -573,9 +579,10 @@ async def _async_main(args: argparse.Namespace) -> int:
                                                   next_only=args.next))
         print("\n\n".join(parts))
     elif layout:
-        print(render_summary(payload, color=color, layout=layout))
+        print(render_summary(payload, color=color, layout=layout,
+                             lang=args.lang or cfg.language))
     if args.legend:
-        print(("\n" if layout else "") + render_legend(color))
+        print(("\n" if layout else "") + render_legend(color, args.lang or cfg.language))
     return 0
 
 
@@ -781,13 +788,25 @@ def _describe_error(exc: BaseException, args: argparse.Namespace) -> tuple[int, 
                         "(run with -v for the full traceback)")
 
 
+def _legend_language(args: argparse.Namespace) -> str:
+    """--legend alone runs without loading the config (no login): take
+    --lang, else "language" (and "locale") straight from config.json."""
+    if args.lang:
+        return args.lang
+    data = _load_json(Path(args.config))
+    try:
+        return resolve_language(data.get("language"), data.get("locale") or ScraperConfig.locale)
+    except ValueError:
+        return "en"
+
+
 def main() -> int:
     if sys.argv[1:2] == ["init"]:
         return setup_wizard.run(sys.argv[2:])
     args = _parse_args()
     if args.legend and not _layout(args):
         # Only the legend: no login, no network.
-        print(render_legend(resolve_color(args.color)))
+        print(render_legend(resolve_color(args.color), _legend_language(args)))
         return 0
     _setup_logging(args.verbose,
                    quiet=bool(_layout(args) or args.query or args.sections or args.now
