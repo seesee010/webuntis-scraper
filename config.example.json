@@ -9,6 +9,7 @@
   "scrape_homework": true,
   "scrape_absences": true,
   "scrape_messages": true,
+  "scrape_holidays": false,
   "headless": true,
   "slow_mo_ms": 0,
   "timeout_ms": 45000,

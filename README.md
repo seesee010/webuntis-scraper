@@ -59,6 +59,7 @@ By default (`--transport auto`) no browser is needed:
    - Exams: `/api/exams`
    - Homework: `/api/homeworks/lessons`
    - Absences: `/api/classreg/absences/students`
+   - Holidays (`--holidays`): REST v1 `/api/rest/view/v1/app/data`, which the login already loads
    - Messages: REST v1 `/api/rest/view/v1/messages`
 
 If the HTTP login gets an unexpected answer (e.g. a WAF block, 2FA or
@@ -254,6 +255,7 @@ untis --now                # the current and the next lesson
 untis --tests               # all upcoming tests / exams
 untis --homework             # all open homework
 untis --absences             # absences of this school year, with totals
+untis --holidays             # upcoming holidays with a countdown
 untis --changes --notify   # what changed since last time, as a desktop notification
 ```
 
@@ -325,6 +327,8 @@ untis -H --days-forward 5        # homework due in the next 5 school days
 untis -t -H                      # both sections
 untis --absences                 # absences of this school year, with totals
 untis -A --days-back 10 --days-forward 0   # absences of the last 10 school days
+untis --holidays                 # upcoming holidays: dates, days and school days until then
+untis --holidays --next          # only the next break, as one sentence
 untis --now                      # the current and the next lesson
 untis --now --format waybar      # JSON for a Waybar custom module
 untis --changes                  # what changed since the last --changes run
@@ -392,6 +396,8 @@ $ untis --table --from mon --to tue
 `--homework` (also `-H`) shows only homework: open ones first by due date (overdue ones in red), then completed ones dimmed with a ✓, each with its full text wrapped to the terminal, a note and attachments if there are any. Without a window it covers the whole school year; with `--days-forward`, `--from`, … only homework *due* in that window (WebUntis filters by the lesson it was given in, so `untis` looks further back and filters by due date itself). Together with `--tests` both sections are shown.
 
 `--absences` (also `-A`) shows only absences, oldest first, with totals in the header: days, missed lessons and how many aren't excused. Each absence shows its time, the lessons it covers, whether it's excused (or the school's own excuse status), the reason, and the text and excuse note on indented lines; not excused ones are red. Lessons are counted with the school's time grid: every period the absence overlaps counts. An absence over several days counts its weekdays (holidays in between aren't known and still count). Without a window it covers the whole school year; with `--days-back`, `--from`, … only that window. It can be combined with `--tests` and `--homework`.
+
+`--holidays` shows the upcoming holidays with a countdown: dates, days until they start and how many school days (Monday to Friday, today included, holidays not counted) are left until then. Holidays that touch (e.g. a single free day right before the autumn break, or a public holiday inside it, also across a weekend) are shown as one break, named after its longest part; a break that is on right now is shown in yellow. `--holidays --next` prints only one sentence about the next break. The data comes with the login (`/app/data`), so it costs no extra request; the date window doesn't apply. It can be combined with `--tests`, `--homework` and `--absences` (then `--next` is the date window of those). `"scrape_holidays": true` in `config.json` adds the holidays to every JSON output.
 
 `--now` shows the lesson running right now (with the time left) and the next one; after school or on a weekend, the first lesson of the next school day. `--format json` prints the same as data, `--format waybar` the JSON a [Waybar](https://github.com/Alexays/Waybar) custom module expects (`text`, `tooltip`, `class`, where `class` is the lesson's status or `idle`). `--idle-empty` prints nothing between lessons so the module hides. With `--max-age` the bar is fed from the cache instead of hitting WebUntis every minute:
 
@@ -515,6 +521,7 @@ untis --clear-session                                     # log out: drop the sa
   },
   "homework":  { "items": [...] },
   "absences":  { "items": [...] },
+  "holidays":  { "items": [ { "name": "Autumn break", "start": "2026-11-02", "end": "2026-11-08" } ] },   // with --holidays
   "messages":  { "items": [...] }
 }
 ```

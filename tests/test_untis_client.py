@@ -312,6 +312,24 @@ class TestProbeSession:
         assert await c._probe_session() is True
         assert (c._person_id, c._person_type, c._resource_type) == (4242, 5, "STUDENT")
         assert c.user_display == "Max Muster"
+        assert c.holidays == []
+
+    async def test_probe_keeps_the_holidays_from_app_data(
+        self, cfg: Any, fake_session: MagicMock, fake_page: MagicMock
+    ):
+        token = self._jwt({"person_id": 4242, "roles": "STUDENT"})
+        holidays = [{"id": 7, "name": "Autumn break", "start": "2026-10-26T00:00:00",
+                     "end": "2026-11-01T23:59:59"}]
+        async def evaluate(js, payload):
+            if payload["url"].endswith("/token/new"):
+                return {"status": 200, "ok": True, "raw": token, "data": None}
+            return {"status": 200, "ok": True, "raw": "{}", "data": {
+                "user": {"person": {"id": 4242}}, "holidays": holidays}}
+        fake_page.evaluate = evaluate
+        c = WebUntisClient(cfg, fake_session)
+        c._page = fake_page
+        assert await c._probe_session() is True
+        assert c.holidays == holidays
 
     async def test_not_logged_in(
         self, cfg: Any, fake_session: MagicMock, fake_page: MagicMock

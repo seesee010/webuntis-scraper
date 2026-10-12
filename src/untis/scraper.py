@@ -25,6 +25,7 @@ from .normalize import (
     normalize_timetable_grid,
     normalize_timetable_lesson,
 )
+from .holidays import normalize_holidays
 from .untis_client import WebUntisClient
 
 log = logging.getLogger(__name__)
@@ -88,6 +89,8 @@ class Scraper:
             tasks.append(("absences", self._scrape_absences(start, end)))
         if self.cfg.scrape_messages:
             tasks.append(("messages", self._scrape_messages()))
+        if self.cfg.scrape_holidays:
+            tasks.append(("holidays", self._scrape_holidays()))
 
         # Sequential, not parallel - the server throttles per session.
         for name, coro in tasks:
@@ -282,6 +285,17 @@ class Scraper:
         return {
             "source": "rest_v1",
             "items": [normalize_message(x) for x in raw],
+        }
+
+    async def _scrape_holidays(self) -> dict[str, Any]:
+        """Holidays of the current school year and later (the client
+        already loaded them with /app/data during login)."""
+        raw = getattr(self.client, "holidays", None)
+        year_start = getattr(self.client, "school_year_start", None)
+        return {
+            "source": "rest_v1",
+            "items": normalize_holidays(raw if isinstance(raw, list) else [],
+                                        year_start if isinstance(year_start, date) else None),
         }
 
 

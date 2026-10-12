@@ -65,6 +65,7 @@ Par défaut (`--transport auto`), aucun navigateur n'est nécessaire :
    - Examens : `/api/exams`
    - Devoirs : `/api/homeworks/lessons`
    - Absences : `/api/classreg/absences/students`
+   - Vacances (`--holidays`) : REST v1 `/api/rest/view/v1/app/data`, déjà chargé par la connexion
    - Messages : REST v1 `/api/rest/view/v1/messages`
 
 Si la connexion HTTP reçoit une réponse inattendue (par exemple un blocage du WAF, une 2FA
@@ -262,6 +263,7 @@ untis --now                # le cours actuel et le suivant
 untis --tests               # tous les contrôles / examens à venir
 untis --homework             # tous les devoirs non faits
 untis --absences             # absences de cette année scolaire, avec totaux
+untis --holidays             # prochaines vacances avec compte à rebours
 untis --changes --notify   # ce qui a changé depuis la dernière fois, en notification de bureau
 ```
 
@@ -333,6 +335,8 @@ untis -H --days-forward 5        # devoirs à rendre dans les 5 prochains jours 
 untis -t -H                      # les deux sections
 untis --absences                 # absences de cette année scolaire, avec totaux
 untis -A --days-back 10 --days-forward 0   # absences des 10 derniers jours de cours
+untis --holidays                 # prochaines vacances : dates, jours et jours de cours restants
+untis --holidays --next          # seulement les prochaines vacances, en une phrase
 untis --now                      # le cours actuel et le suivant
 untis --now --format waybar      # JSON pour un module personnalisé Waybar
 untis --changes                  # ce qui a changé depuis la dernière exécution de --changes
@@ -400,6 +404,8 @@ $ untis --table --from mon --to tue
 `--homework` (aussi `-H`) n'affiche que les devoirs : ceux à faire d'abord par date d'échéance (en retard en rouge), puis ceux terminés grisés avec un ✓, chacun avec son texte complet adapté à la largeur du terminal, une remarque et les pièces jointes s'il y en a. Sans période, il couvre toute l'année scolaire ; avec `--days-forward`, `--from`, … seulement les devoirs *à rendre* dans cette période (WebUntis filtre par le cours où ils ont été donnés, donc `untis` regarde plus loin en arrière et filtre lui-même par échéance). Avec `--tests`, les deux sections sont affichées.
 
 `--absences` (aussi `-A`) n'affiche que les absences, les plus anciennes d'abord, avec des totaux dans l'en-tête : jours, cours manqués et combien ne sont pas justifiées. Chaque absence indique son horaire, les cours concernés, si elle est justifiée (ou le statut de justification propre à l'école), le motif, ainsi que le texte et la note de justification en retrait en dessous ; celles non justifiées sont en rouge. Les cours sont comptés avec la grille horaire de l'école : chaque période que l'absence chevauche compte. Une absence sur plusieurs jours compte ses jours de semaine (les vacances entre deux ne sont pas connues et comptent aussi). Sans période, elle couvre toute l'année scolaire ; avec `--days-back`, `--from`, … seulement cette période. Combinable avec `--tests` et `--homework`.
+
+`--holidays` affiche les prochaines vacances avec un compte à rebours : dates, jours avant le début et nombre de jours de cours (du lundi au vendredi, aujourd'hui compris, jours fériés exclus) qu'il reste d'ici là. Les congés qui se touchent (par ex. un jour libre juste avant les vacances d'automne, ou un jour férié en plein milieu, même à travers un week-end) sont affichés comme une seule période, nommée d'après sa partie la plus longue ; des vacances en cours sont affichées en jaune. `--holidays --next` n'affiche qu'une phrase sur les prochaines vacances. Les données arrivent avec la connexion (`/app/data`), donc aucune requête supplémentaire ; la période ne s'applique pas ici. Combinable avec `--tests`, `--homework` et `--absences` (`--next` est alors leur période). `"scrape_holidays": true` dans `config.json` ajoute les vacances à chaque sortie JSON.
 
 `--now` affiche le cours en cours (avec le temps restant) et le suivant ; après les cours ou le week-end, le premier cours du prochain jour de cours. `--format json` affiche la même chose sous forme de données, `--format waybar` le JSON attendu par un module personnalisé [Waybar](https://github.com/Alexays/Waybar) (`text`, `tooltip`, `class`, où `class` est le statut du cours ou `idle`). `--idle-empty` n'affiche rien entre les cours pour que le module se masque. Avec `--max-age`, la barre est alimentée par le cache au lieu d'interroger WebUntis chaque minute :
 
@@ -523,6 +529,7 @@ untis --clear-session                                     # se déconnecter : su
   },
   "homework":  { "items": [...] },
   "absences":  { "items": [...] },
+  "holidays":  { "items": [ { "name": "Autumn break", "start": "2026-11-02", "end": "2026-11-08" } ] },   // avec --holidays
   "messages":  { "items": [...] }
 }
 ```
