@@ -1,6 +1,6 @@
 """`untis init`: set up config.json and .env from any WebUntis URL.
 
-    untis init                                   # interactive
+    untis init                                   # interactive: type to find your school
     untis init --url URL --username NAME < pw    # non-interactive
 
 The login is tested (plain HTTP, with a throwaway session file) before
@@ -153,20 +153,35 @@ def run(
     out: Callable[[str], None] = print,
     search: Callable[[str], list[dict]] = search_schools,
     verify: Callable[..., Any] = verify_login,
+    pick: Optional[Callable[..., tuple[str, Any]]] = None,
 ) -> int:
-    """The `untis init` command (all I/O injectable for tests)."""
+    """The `untis init` command (all I/O injectable for tests). `pick` is
+    the live school search (#76); by default only on a real terminal."""
+    from . import school_picker
     stdin = stdin or sys.stdin
+    if pick is None and school_picker.available(stdin):
+        pick = school_picker.pick
     args = _parser().parse_args(argv)
     interactive = not (args.url or args.search) or not args.username
     from .untis_client import LoginError, WebUntisError
 
     try:
         # --- school --------------------------------------------------------
-        if args.search:
+        # Live search on a terminal (#76): without --url, and with --search
+        # only when the user can still choose (no --username).
+        kind, value = "", None
+        if pick and not args.url and not (args.search and args.username):
+            if not args.search:
+                out("Type the name or town of your school (or paste a WebUntis URL):")
+            kind, value = pick(search, args.search or "")
+        if kind == "school":
+            server, school = school_target(value)
+        elif args.search and not kind:
             server, school = _pick_from_search(args.search, search, ask, out,
                                                interactive and not args.username)
         else:
-            url = args.url or ask("Paste any WebUntis URL of your school: ")
+            url = value if kind == "url" else (args.url or ask(
+                "Paste any WebUntis URL of your school: "))
             server, school = parse_webuntis_url(url)
             if school is None:
                 matches = schools_on_server(search(server), server)
@@ -238,6 +253,11 @@ def _pick_from_search(term, search, ask, out, interactive) -> tuple[str, str]:
         chosen = schools[int(choice) - 1]
     else:
         chosen = schools[0]
+    return school_target(chosen)
+
+
+def school_target(chosen: dict) -> tuple[str, str]:
+    """(server, school) of a search result, e.g. ("mese", "demo_school")."""
     server = (chosen.get("server") or "").lower()
     if not server.endswith(WEBUNTIS_DOMAIN):
         raise SetupError(f"unexpected server in the search result: {chosen.get('server')!r}")

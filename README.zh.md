@@ -189,10 +189,12 @@ untis --completion fish > ~/.config/fish/completions/untis.fish
 不会显示。如果账户使用双重验证或 SSO，请加上 `--no-verify`。
 
 ```bash
-untis init                                         # 交互式：学校网址、用户名、密码、登录测试
-untis init --search "School name"                  # 改为按学校名称搜索
+untis init                                         # 交互式：边输入边查找学校、用户名、密码、登录测试
+untis init --search "School name"                  # 用这个名称开始实时搜索
 untis init --url URL --username NAME < password    # 用于脚本（密码从 stdin 读取）
 ```
+
+在终端中，`untis init` 会像 fzf 一样边输入边查找你的学校：稍作停顿后会调用 WebUntis 公开的学校搜索，匹配结果列在输入框下方，用 ↑/↓（或 Ctrl-P/Ctrl-N）选择，Enter 确认，Esc 取消。很短的名称（"h"、"htl"）对搜索来说匹配的学校太多，这时会提示继续输入，直到列表足够短；加上城市名会有帮助（"gymnasium graz"）。也可以在同一个输入框中粘贴 WebUntis 网址。没有终端时（通过管道输入、Windows），仍会像以前一样询问网址。
 
 程序会在 `~/.config/untis/`（或 `$XDG_CONFIG_HOME/untis/`）中查找配置文件。会话、输出文件和调试截图
 会保存到 `~/.local/share/untis/`，所以可以在任何目录下运行 `untis`。如果没有
