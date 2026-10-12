@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 
-from . import __version__, absences, cache, changes, dayinfo, live, setup_wizard
+from . import __version__, absences, cache, changes, dayinfo, holidays, live, setup_wizard
 from . import now as now_mod
 from .browser import BrowserSession
 from .config import (
@@ -255,6 +255,12 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
              "Combinable with --tests and --homework.",
     )
     ap.add_argument(
+        "--holidays", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Only show the upcoming holidays with a countdown (days and school "
+             "days until they start); with --next only the next one. No extra "
+             "request. Combinable with --tests, --homework and --absences.",
+    )
+    ap.add_argument(
         "--oneline", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print one line per day instead of the day view "
              "(* changed, ~X~ cancelled/removed, ! exam).",
@@ -364,22 +370,22 @@ def _parse_args(
                        if getattr(args, f"{what}_q") is not None), None)
     if args.query and (shortcut or from_to or days):
         ap.error("--start/--end/--free can't be combined with other date options")
-    # --tests/--homework/--absences: only these sections instead of the day view.
-    args.sections = bool(args.tests or args.homework or args.absences)
+    # --tests/--homework/--absences/--holidays: only these sections instead of the day view.
+    args.sections = bool(args.tests or args.homework or args.absences or args.holidays)
     if args.sections and (args.query or args.oneline or args.table):
-        ap.error("--tests/--homework/--absences can't be combined with --start/--end/--free, "
-                 "--oneline or --table")
+        ap.error("--tests/--homework/--absences/--holidays can't be combined with "
+                 "--start/--end/--free, --oneline or --table")
     args.window_given = bool(shortcut or from_to or days)
     if args.now and (args.window_given or args.query or args.sections
                      or args.oneline or args.table):
         ap.error("--now can't be combined with date options, questions, --tests, "
-                 "--homework, --absences, --oneline or --table")
+                 "--homework, --absences, --holidays, --oneline or --table")
     if args.format == "waybar" and not args.now:
         ap.error("--format waybar only works with --now")
     if args.changes and (args.query or args.now or args.sections
                          or args.oneline or args.table):
         ap.error("--changes can't be combined with questions, --now, --tests, "
-                 "--homework, --absences, --oneline or --table")
+                 "--homework, --absences, --holidays, --oneline or --table")
     if args.notify and not args.changes:
         ap.error("--notify only works with --changes")
     if args.live is not None and args.changes:
@@ -538,6 +544,9 @@ async def _async_main(args: argparse.Namespace) -> int:
             parts.append(render_homework(payload, color=color, today=today, now=now))
         if args.absences:
             parts.append(absences.render_absences(payload, color=color, today=today, now=now))
+        if args.holidays:
+            parts.append(holidays.render_holidays(payload, color=color, today=today, now=now,
+                                                  next_only=args.next))
         print("\n\n".join(parts))
     elif layout:
         print(render_summary(payload, color=color, layout=layout))
@@ -547,15 +556,19 @@ async def _async_main(args: argparse.Namespace) -> int:
 
 
 def _only_sections(cfg, args: argparse.Namespace) -> None:
-    """--tests/--homework/--absences: fetch only those modules. Without a
-    window on the command line: tests from today, homework and absences
-    from the start of the school year, all until its end (config
+    """--tests/--homework/--absences/--holidays: fetch only those modules.
+    Without a window on the command line: tests from today, homework and
+    absences from the start of the school year, all until its end (config
     days_forward is meant for the day view and is ignored). Homework is
-    always kept by due date."""
+    always kept by due date. Holidays ignore the window; alone, --next
+    only means "just the next one" there (no timetable lookahead)."""
     cfg.scrape_timetable = cfg.scrape_messages = False
     cfg.scrape_exams = bool(args.tests)
     cfg.scrape_homework = bool(args.homework)
     cfg.scrape_absences = bool(args.absences)
+    cfg.scrape_holidays = bool(args.holidays)
+    if args.holidays and not (args.tests or args.homework or args.absences):
+        cfg.pick_day = None
     cfg.homework_by_due_date = bool(args.homework)
     if not args.window_given:
         cfg.until_school_year_end = True
@@ -584,6 +597,7 @@ async def _answer_question(cfg, args: argparse.Namespace, today: date, now: date
     else:
         cfg.start_date = cfg.end_date = day
     cfg.scrape_exams = cfg.scrape_homework = cfg.scrape_absences = cfg.scrape_messages = False
+    cfg.scrape_holidays = False
     payload, _ = await _get_payload(cfg, args, today, now)
     timetable = payload.get("timetable") or {}
     if "error" in timetable:
@@ -606,6 +620,7 @@ async def _answer_now(cfg, args: argparse.Namespace, today: date, now: datetime)
     cfg.start_date = cfg.end_date = None
     cfg.pick_day = "next"
     cfg.scrape_exams = cfg.scrape_homework = cfg.scrape_absences = cfg.scrape_messages = False
+    cfg.scrape_holidays = False
     payload, _ = await _get_payload(cfg, args, today, now)
     timetable = payload.get("timetable") or {}
     if "error" in timetable:
@@ -624,7 +639,7 @@ async def _answer_now(cfg, args: argparse.Namespace, today: date, now: datetime)
 
 async def _answer_changes(cfg, args: argparse.Namespace, today: date, now: datetime) -> int:
     """--changes: compare with the snapshot of the last --changes run."""
-    cfg.scrape_absences = cfg.scrape_messages = False
+    cfg.scrape_absences = cfg.scrape_messages = cfg.scrape_holidays = False
     payload, _ = await _get_payload(cfg, args, today, now)
     timetable = payload.get("timetable") or {}
     if "error" in timetable:

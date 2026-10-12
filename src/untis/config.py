@@ -120,6 +120,9 @@ class ScraperConfig:
     scrape_homework: bool = True
     scrape_absences: bool = True
     scrape_messages: bool = True
+    # --holidays (from /app/data, no extra request); off by default to keep
+    # the JSON small
+    scrape_holidays: bool = False
 
     # "auto": plain HTTP, browser only as fallback; "http"; "browser"
     transport: str = "auto"
@@ -242,7 +245,7 @@ def load_config(
         if field_name in {
             "headless", "pretty_json", "include_raw",
             "scrape_timetable", "scrape_exams", "scrape_homework",
-            "scrape_absences", "scrape_messages", "calendar_days",
+            "scrape_absences", "scrape_messages", "scrape_holidays", "calendar_days",
             "browser_no_sandbox", "write_json",
         }:
             current = getattr(cfg, field_name, False)

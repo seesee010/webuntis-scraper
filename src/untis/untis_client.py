@@ -235,6 +235,7 @@ class WebUntisClient:
         self.time_grid: list[dict[str, str]] = []
         self.school_year_end: Optional[date] = None
         self.school_year_start: Optional[date] = None
+        self.holidays: list[dict] = []            # raw /app/data holidays
         self._logged_in = False
         self._rpc_id = 0
         self._last_request_ts = 0.0
@@ -468,6 +469,7 @@ class WebUntisClient:
         self.time_grid = _time_grid(app_data)
         self.school_year_start = _school_year_bound(app_data, "start")
         self.school_year_end = _school_year_bound(app_data, "end")
+        self.holidays = list(app_data.get("holidays") or [])
         log.debug(
             "Session belongs to %s (person_id=%s, type=%s)",
             self._user_display, self._person_id, kind,

@@ -19,7 +19,7 @@ from .exporter import _strip_raw
 from .privacy import write_private_text
 
 CACHE_VERSION = 1
-MODULES = ("timetable", "exams", "homework", "absences", "messages")
+MODULES = ("timetable", "exams", "homework", "absences", "messages", "holidays")
 _DURATION = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([smhd]?)\s*$", re.IGNORECASE)
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "": 60}
 
