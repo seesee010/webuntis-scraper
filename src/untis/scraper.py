@@ -9,6 +9,7 @@ from typing import Any
 
 from .config import ScraperConfig
 from .dates import (
+    homework_date,
     merge_timetables,
     pick_school_day,
     school_day_span,
@@ -255,7 +256,7 @@ class Scraper:
         items = [normalize_homework(x) for x in raw]
         if self.cfg.homework_by_due_date:
             lo, hi = start.isoformat(), end.isoformat()
-            items = [h for h in items if lo <= (h.get("due_date") or h.get("date") or "") <= hi]
+            items = [h for h in items if lo <= homework_date(h, self.cfg.homework_by_due_date) <= hi]
         return {
             "source": "api",
             "start": start.isoformat(),

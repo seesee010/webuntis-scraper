@@ -8,6 +8,12 @@ from typing import Any, Optional
 _DOTTED = re.compile(r"^(\d{1,2})\.(\d{1,2})\.?(\d{4})?$")
 
 
+def homework_date(homework: dict[str, Any], by_due_date: bool) -> str:
+    """Choose the view's date, falling back when the preferred date is absent."""
+    primary, fallback = ("due_date", "date") if by_due_date else ("date", "due_date")
+    return homework.get(primary) or homework.get(fallback) or ""
+
+
 def parse_date(text: str, today: date) -> date:
     """Parse "2026-10-12", "12.10.2026", "12.10." or "12.10".
 

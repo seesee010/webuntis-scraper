@@ -5,9 +5,30 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from untis.dates import parse_date, pick_school_day, trim_timetable, week_range
+from untis.dates import homework_date, parse_date, pick_school_day, trim_timetable, week_range
 
 FRI = date(2026, 10, 2)
+
+
+@pytest.mark.parametrize("by_due_date, lesson, due, expected", [
+    (True, "2026-10-02", "2026-10-06", "2026-10-06"),
+    (False, "2026-10-02", "2026-10-06", "2026-10-02"),
+    (True, "2026-10-02", None, "2026-10-02"),
+    (False, None, "2026-10-06", "2026-10-06"),
+    (False, "", "2026-10-06", "2026-10-06"),
+    (True, "2026-10-02", "", "2026-10-02"),
+    (True, None, None, ""),
+    (False, None, None, ""),
+])
+def test_homework_date_preference_and_fallback(by_due_date, lesson, due, expected):
+    homework = {"date": lesson, "due_date": due}
+    assert homework_date(homework, by_due_date) == expected
+
+
+def test_homework_date_missing_keys():
+    assert homework_date({}, True) == ""
+    assert homework_date({"date": "2026-10-02"}, True) == "2026-10-02"
+    assert homework_date({"due_date": "2026-10-06"}, False) == "2026-10-06"
 
 
 @pytest.mark.parametrize("text, expected", [

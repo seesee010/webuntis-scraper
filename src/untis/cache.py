@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import ScraperConfig
-from .dates import pick_school_day, school_day_window, trim_timetable
+from .dates import homework_date, pick_school_day, school_day_window, trim_timetable
 from .exporter import _strip_raw
 from .privacy import write_private_text
 
@@ -100,6 +100,7 @@ def _in(value: str | None, start: date, end: date) -> bool:
 
 def slice_payload(
     payload: dict[str, Any], start: date, end: date, note: str, saved_at: str,
+    homework_by_due_date: bool = False,
 ) -> dict[str, Any]:
     """The cached payload restricted to start..end, marked as cached."""
     out = json.loads(json.dumps(payload))                  # deep copy
@@ -113,7 +114,7 @@ def slice_payload(
         out["exams"]["exams"] = [e for e in out["exams"]["exams"] if _in(e.get("date"), start, end)]
     if "homework" in out and "items" in out["homework"]:
         out["homework"]["items"] = [h for h in out["homework"]["items"]
-                                    if _in(h.get("date") or h.get("due_date"), start, end)]
+                                    if _in(homework_date(h, homework_by_due_date), start, end)]
     if "absences" in out and "items" in out["absences"]:
         out["absences"]["items"] = [a for a in out["absences"]["items"]
                                     if _in(a.get("start_date"), start, end)]
@@ -142,4 +143,5 @@ def from_cache(
         raise CacheMiss(
             f"cached data covers {window.get('start')}..{window.get('end')}, "
             f"not {start.isoformat()}..{end.isoformat()}")
-    return slice_payload(payload, start, end, note, entry["saved_at"])
+    return slice_payload(payload, start, end, note, entry["saved_at"],
+                         homework_by_due_date=cfg.homework_by_due_date)
