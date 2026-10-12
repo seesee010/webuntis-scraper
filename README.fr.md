@@ -334,6 +334,7 @@ untis --homework                 # tous les devoirs de cette année scolaire
 untis -H --days-forward 5        # devoirs à rendre dans les 5 prochains jours de cours
 untis -t -H                      # les deux sections
 untis -s --week --only MATH      # seulement les cours de maths cette semaine
+untis -s --lang de               # la vue par jour en allemand (Mo 05.10. … entfällt)
 untis -t -H --except REL,ETH     # tests et devoirs sans REL ni ETH
 untis --absences                 # absences de cette année scolaire, avec totaux
 untis -A --days-back 10 --days-forward 0   # absences des 10 derniers jours de cours
@@ -410,6 +411,8 @@ $ untis --table --from mon --to tue
 `--holidays` affiche les prochaines vacances avec un compte à rebours : dates, jours avant le début et nombre de jours de cours (du lundi au vendredi, aujourd'hui compris, jours fériés exclus) qu'il reste d'ici là. Les congés qui se touchent (par ex. un jour libre juste avant les vacances d'automne, ou un jour férié en plein milieu, même à travers un week-end) sont affichés comme une seule période, nommée d'après sa partie la plus longue ; des vacances en cours sont affichées en jaune. `--holidays --next` n'affiche qu'une phrase sur les prochaines vacances. Les données arrivent avec la connexion (`/app/data`), donc aucune requête supplémentaire ; la période ne s'applique pas ici. Combinable avec `--tests`, `--homework` et `--absences` (`--next` est alors leur période). `"scrape_holidays": true` dans `config.json` ajoute les vacances à chaque sortie JSON.
 
 `--only MATIÈRE` n'affiche que ces matières, `--except MATIÈRE` les masque : dans la vue par jour, `--oneline`, `--table`, `--tests`, `--homework` et `--json -`. Une matière correspond par son nom court ou long (`MATH` ou `mathematics`), sans tenir compte de la casse ; plusieurs se séparent par des virgules (`--only MATH,ENG`) ou s'indiquent en répétant l'option. Les événements n'ont pas de matière : `--only` les masque, `--except` les garde. Les absences n'ont pas de matière et ne sont pas filtrées. Les fichiers JSON et le cache gardent toujours tout, un filtre ne cache donc jamais de données à la prochaine exécution. Non disponible avec `--start`/`--end`/`--free`, `--now` et `--changes`.
+
+`--lang de` affiche la vue par jour, `--oneline`, `--table` et `--legend` en allemand : noms des jours (`Mo`, `Di`, …), statuts (`entfällt`, `ausgetragen`, `kein Lehrer`, `geändert`, `Prüfung`, `Veranstaltung`, `Supplierung`) et les autres textes de ces vues. `"language": "de"` dans `config.json` en fait la valeur par défaut ; `"auto"` prend la langue de `"locale"` (`de-AT` → allemand, tout le reste anglais). Par défaut, c'est l'anglais (`en`). Les autres vues (`--tests`, `--homework`, `--absences`, `--now`, …) restent en anglais.
 
 `--now` affiche le cours en cours (avec le temps restant) et le suivant ; après les cours ou le week-end, le premier cours du prochain jour de cours. `--format json` affiche la même chose sous forme de données, `--format waybar` le JSON attendu par un module personnalisé [Waybar](https://github.com/Alexays/Waybar) (`text`, `tooltip`, `class`, où `class` est le statut du cours ou `idle`). `--idle-empty` n'affiche rien entre les cours pour que le module se masque. Avec `--max-age`, la barre est alimentée par le cache au lieu d'interroger WebUntis chaque minute :
 

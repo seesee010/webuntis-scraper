@@ -13,6 +13,61 @@ _ANSI = re.compile(r"\033\[[0-9;]*m")
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
+# --lang (#27): the day view (-s, --oneline, --table, --legend) in other
+# languages. Keys are the English texts (templates with {placeholders});
+# anything missing stays English.
+LANGUAGES = ("en", "de")
+_WEEKDAYS = {"de": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]}
+_TEXT: dict[str, dict[str, str]] = {"de": {
+    # status labels
+    "cancelled": "entfällt",
+    "removed": "ausgetragen",
+    "no teacher": "kein Lehrer",
+    "changed": "geändert",
+    "substitution": "Supplierung",
+    "extra": "zusätzlich",
+    "exam": "Prüfung",
+    "event": "Veranstaltung",
+    # day view
+    " (for {name})": " (statt {name})",
+    "No lessons in this window.": "Keine Stunden in diesem Zeitraum.",
+    "──── now {now} · next in {left} ────": "──── jetzt {now} · nächste in {left} ────",
+    "now · {left} left": "jetzt · noch {left}",
+    "cached, just now": "zwischengespeichert, gerade eben",
+    "cached, {age} old": "zwischengespeichert, {age} alt",
+    "Exams": "Prüfungen",
+    "Homework": "Hausübungen",
+    "due {day}": "fällig {day}",
+    "{n} absence": "{n} Abwesenheit",
+    "{n} absences": "{n} Abwesenheiten",
+    " ({n} not excused)": " ({n} nicht entschuldigt)",
+    "{n} unread message": "{n} ungelesene Nachricht",
+    "{n} unread messages": "{n} ungelesene Nachrichten",
+    # --table
+    "Time": "Zeit",
+    "▶ now {now} · {names} · {left} left": "▶ jetzt {now} · {names} · noch {left}",
+    "now {now} · next: {names} at {first} (in {left})":
+        "jetzt {now} · als Nächstes: {names} um {first} (in {left})",
+    # --legend
+    "Legend": "Legende",
+    "regular": "normal",
+    "substitute": "Vertretung",
+    "new room": "neuer Raum",
+    "now": "jetzt",
+    "absent": "abwesend",
+    " the running lesson, ": " die laufende Stunde, ",
+    "dimmed": "abgedunkelt",
+    " = already over": " = schon vorbei",
+    " in --table: a lesson you were absent from": " in --table: eine Stunde, in der du gefehlt hast",
+}}
+
+
+def tr(text: str, lang: str = "en", **values: Any) -> str:
+    """`text` in `lang` (English if there is no translation), with
+    {placeholders} filled in."""
+    out = _TEXT.get(lang, {}).get(text, text)
+    return out.format(**values) if values else out
+
 # Shown for entries without a more specific label (see _label()).
 _STATUS_LABELS = {
     "CHANGED": "changed",
@@ -42,8 +97,13 @@ ROLE_STYLES: dict[str, str] = {
 
 
 class _Style:
-    def __init__(self, enabled: bool):
+    def __init__(self, enabled: bool, lang: str = "en"):
         self.enabled = enabled
+        self.lang = lang
+
+    def t(self, text: str, **values: Any) -> str:
+        """Translate a view text into this style's language (--lang)."""
+        return tr(text, self.lang, **values)
 
     def _wrap(self, code: str, text: str) -> str:
         return f"\033[{code}m{text}\033[0m" if self.enabled and text else text
@@ -74,9 +134,9 @@ def use_color() -> bool:
     return sys.stdout.isatty() and "NO_COLOR" not in os.environ
 
 
-def _fmt_day(iso: str) -> str:
+def _fmt_day(iso: str, lang: str = "en") -> str:
     d = date.fromisoformat(iso)
-    return f"{WEEKDAYS[d.weekday()]} {d:%d.%m.}"
+    return f"{_WEEKDAYS.get(lang, WEEKDAYS)[d.weekday()]} {d:%d.%m.}"
 
 
 def _shorts(items: list[dict]) -> str:
@@ -95,7 +155,7 @@ def _elements(items: list[dict], st: _Style, base=None) -> tuple[str, str]:
             plain.append(name if st.enabled else f"~{name}~")
             styled.append(st.role("gone", name) if st.enabled else f"~{name}~")
         elif t.get("replaces") or t.get("status") == "ADDED":
-            note = f" (for {t['replaces']})" if t.get("replaces") else ""
+            note = st.t(" (for {name})", name=t["replaces"]) if t.get("replaces") else ""
             plain.append(name + note)
             styled.append(st.role("added", name) + st.dim(note))
         else:
@@ -115,10 +175,10 @@ def _rooms(items: list[dict], st: _Style) -> tuple[str, str]:
 def _label_tag(label: str, st: _Style) -> str:
     """The status word at the end of a row (not struck through itself)."""
     if label == "cancelled":
-        return st.red(label)
+        return st.red(st.t(label))
     if label == "removed":
-        return st.dim(label)
-    return st.role(label, label) if label else ""
+        return st.dim(st.t(label))
+    return st.role(label, st.t(label)) if label else ""
 
 
 # Labels whose color also tints the subject (cancelled/removed restyle
@@ -249,15 +309,17 @@ def _live_state(day_iso: str, rows: list[dict], now: Optional[datetime]) -> Opti
     return state
 
 
-def _cache_age(cached_at: str, now: datetime) -> str:
+def _cache_age(cached_at: str, now: datetime, lang: str = "en") -> str:
     """"cached, 14 min old" for data answered from the cache."""
     minutes = int((now - datetime.fromisoformat(cached_at)).total_seconds() // 60)
-    return "cached, just now" if minutes < 1 else f"cached, {_fmt_minutes(minutes)} old"
+    if minutes < 1:
+        return tr("cached, just now", lang)
+    return tr("cached, {age} old", lang, age=_fmt_minutes(minutes))
 
 
 def _day_header(day_iso: str, rows: list[dict], note: str, st: _Style) -> str:
     """"Mon 05.10.  07:50–13:25" – span of what actually takes place."""
-    header = st.bold(_fmt_day(day_iso))
+    header = st.bold(_fmt_day(day_iso, st.lang))
     active = [r for r in rows if not r.get("is_cancelled") and not r.get("is_removed")]
     if active:
         header += st.dim(f"  {min(r['start'] for r in active)}–{max(r['end'] for r in active)}")
@@ -275,7 +337,7 @@ def _render_timetable(
     window = window or {}
     if not days:
         note = f" ({window['note']})" if window.get("note") else ""
-        return ["", st.dim(f"  No lessons in this window.{note}")]
+        return ["", st.dim("  " + st.t("No lessons in this window.") + note)]
 
     # Events don't use the columns, so they don't size them either.
     all_rows = [r for rows in days.values() for r in rows if r["subject"]]
@@ -292,8 +354,9 @@ def _render_timetable(
         prev_slot = None
         for idx, r in enumerate(rows):
             if live and live["line_before"] == idx:
-                out.append("  " + st.cyan(
-                    f"──── now {live['now']} · next in {_fmt_minutes(live['next_in'])} ────"))
+                out.append("  " + st.cyan(st.t("──── now {now} · next in {left} ────",
+                                                now=live["now"],
+                                                left=_fmt_minutes(live["next_in"]))))
             is_current = bool(live) and idx in live["current"]
             is_past = bool(live) and idx in live["past"]
             slot = (r["start"], r["end"])
@@ -333,7 +396,8 @@ def _render_timetable(
                 line += "  " + _label_tag(label, st)
             if is_current:
                 left = _minutes_between(live["now"], r["end"])
-                line += "  " + st.bold(st.yellow(f"now · {_fmt_minutes(left)} left"))
+                line += "  " + st.bold(st.yellow(st.t("now · {left} left",
+                                                      left=_fmt_minutes(left))))
             elif is_past and label not in ("cancelled", "removed"):
                 line = st.dim(_plain(line))
             out.append(line)
@@ -402,7 +466,7 @@ def _fit(styled: str, width: int) -> str:
 def _render_oneline(timetable: dict, st: _Style, window: dict | None = None) -> list[str]:
     days = _days_rows(timetable)
     if not days:
-        return [st.dim("No lessons in this window.")]
+        return [st.dim(st.t("No lessons in this window."))]
     units = _grid_units(timetable, days)
     window = window or {}
     out = []
@@ -608,7 +672,7 @@ def _draw_table(st: _Style, units: list[tuple[str, str]], heads: list[str],
 
     out = [rule("┌", "┬", "┐"),
            "│" + "│".join(f" {_fit(h, w)} " for h, w in
-                         zip([st.bold("Time")] + [st.bold(st.yellow(h)) if c == today
+                         zip([st.bold(st.t("Time"))] + [st.bold(st.yellow(h)) if c == today
                                                   else st.bold(h) for c, h in enumerate(heads)],
                              widths)) + "│",
            "".join(_junction(True, vertical(k, 0), k > 0, k < len(cols))
@@ -643,12 +707,13 @@ def _now_line(rows: list[dict], live: dict, st: _Style) -> str:
         cur = [rows[i] for i in sorted(live["current"])]
         names = "/".join(dict.fromkeys(r["subject"] or r["title"] for r in cur))
         left = _minutes_between(live["now"], min(r["end"] for r in cur))
-        return st.bold(st.yellow(f"▶ now {live['now']} · {names} · {_fmt_minutes(left)} left"))
+        return st.bold(st.yellow(st.t("▶ now {now} · {names} · {left} left", now=live["now"],
+                                      names=names, left=_fmt_minutes(left))))
     nxt = [r for r in rows if _takes_place(r) and r.get("start", "") > live["now"]]
     first = min(r["start"] for r in nxt)
     names = "/".join(dict.fromkeys(r["subject"] or r["title"] for r in nxt if r["start"] == first))
-    return st.cyan(f"now {live['now']} · next: {names} at {first} "
-                   f"(in {_fmt_minutes(live['next_in'])})")
+    return st.cyan(st.t("now {now} · next: {names} at {first} (in {left})", now=live["now"],
+                        names=names, first=first, left=_fmt_minutes(live["next_in"])))
 
 
 def _period_mark(start: str, end: str, hm: str) -> Optional[str]:
@@ -669,7 +734,7 @@ def _render_table(
     line under the table says what runs now / comes next."""
     days = _days_rows(timetable)
     if not days:
-        return ["", st.dim("  No lessons in this window.")]
+        return ["", st.dim("  " + st.t("No lessons in this window."))]
     width = width or shutil.get_terminal_size((100, 24)).columns
     units = _grid_units(timetable, days)
     absent = _absent_spans(absences)
@@ -698,7 +763,7 @@ def _render_table(
                    mark(d, k, i))
                   for k, i in enumerate(rows)] for d in week_days]
         out.append("")
-        out += _draw_table(st, [units[i] for i in rows], [_fmt_day(d) for d in week_days],
+        out += _draw_table(st, [units[i] for i in rows], [_fmt_day(d, st.lang) for d in week_days],
                            cells, width, periods=periods,
                            today=week_days.index(today) if today in week_days else None)
         if live:
@@ -710,9 +775,9 @@ def _render_exams(exams: dict, st: _Style) -> list[str]:
     items = exams.get("exams") or []
     if not items:
         return []
-    out = ["", st.bold("Exams")]
+    out = ["", st.bold(st.t("Exams"))]
     for e in sorted(items, key=lambda e: (e.get("date") or "", e.get("start_time") or "")):
-        when = _fmt_day(e["date"]) if e.get("date") else "?"
+        when = _fmt_day(e["date"], st.lang) if e.get("date") else "?"
         if e.get("start_time"):
             when += f" {e['start_time']}"
         subj = _shorts(e.get("subjects") or [])
@@ -729,12 +794,12 @@ def _render_homework(homework: dict, st: _Style) -> list[str]:
     items = [h for h in homework.get("items") or [] if not h.get("completed")]
     if not items:
         return []
-    out = ["", st.bold("Homework")]
+    out = ["", st.bold(st.t("Homework"))]
     for h in sorted(items, key=lambda h: h.get("due_date") or ""):
-        due = _fmt_day(h["due_date"]) if h.get("due_date") else "?"
+        due = _fmt_day(h["due_date"], st.lang) if h.get("due_date") else "?"
         subj = _shorts(h.get("subjects") or [])
         text = " ".join((h.get("text") or "").split())
-        out.append(f"  due {due}  {st.bold(subj)}  {text[:80]}")
+        out.append(f"  {st.t('due {day}', day=due)}  {st.bold(subj)}  {text[:80]}")
     return out
 
 
@@ -744,14 +809,14 @@ def _count_line(payload: dict, st: _Style) -> str:
     if "items" in absences:
         n = len(absences["items"])
         unexcused = sum(1 for a in absences["items"] if not a.get("is_excused"))
-        txt = f"{n} absence{'s' if n != 1 else ''}"
+        txt = st.t("{n} absence" if n == 1 else "{n} absences", n=n)
         if unexcused:
-            txt += f" ({unexcused} not excused)"
+            txt += st.t(" ({n} not excused)", n=unexcused)
         parts.append(st.red(txt) if unexcused else txt)
     messages = payload.get("messages") or {}
     if "items" in messages:
         unread = sum(1 for m in messages["items"] if not m.get("read"))
-        txt = f"{unread} unread message{'s' if unread != 1 else ''}"
+        txt = st.t("{n} unread message" if unread == 1 else "{n} unread messages", n=unread)
         parts.append(st.yellow(txt) if unread else txt)
     return st.dim(" · ").join(parts)
 
@@ -759,10 +824,11 @@ def _count_line(payload: dict, st: _Style) -> str:
 def render_summary(
     payload: dict[str, Any], color: Optional[bool] = None,
     now: Optional[datetime] = None, layout: str = "days", width: int | None = None,
+    lang: str = "en",
 ) -> str:
     """`now` marks the running lesson on today's block (default: the
-    current time); pass it explicitly for tests."""
-    st = _Style(use_color() if color is None else color)
+    current time); pass it explicitly for tests. `lang`: see --lang."""
+    st = _Style(use_color() if color is None else color, lang)
     now = now or datetime.now()
     if layout == "oneline":
         section = payload.get("timetable") or {}
@@ -775,7 +841,7 @@ def render_summary(
         f" · {meta.get('school') or ''} · {window.get('start', '')} → {window.get('end', '')}"
     )
     if meta.get("cached_at"):
-        header += "  " + st.yellow(f"({_cache_age(meta['cached_at'], now)})")
+        header += "  " + st.yellow(f"({_cache_age(meta['cached_at'], now, lang)})")
     lines = [header]
 
     for name, render in (("timetable", _render_timetable),
@@ -818,25 +884,31 @@ _LEGEND = [
 ]
 
 
-def render_legend(color: Optional[bool] = None) -> str:
+def render_legend(color: Optional[bool] = None, lang: str = "en") -> str:
     """What each color / marker in the day view means (--legend)."""
-    st = _Style(use_color() if color is None else color)
-    lines = [st.bold("Legend")]
-    for name, subject, teachers, rooms, label in _LEGEND:
+    st = _Style(use_color() if color is None else color, lang)
+    lines = [st.bold(st.t("Legend"))]
+    w = max([11] + [len(st.t(k)) + 1 for k in [r[0] for r in _LEGEND] + ["event", "now", "absent"]])
+    # Column widths from the content: translated notes ("(statt X)") are longer.
+    t_w = max([15] + [len(_teachers(r[2], st)[0]) for r in _LEGEND])
+    r_w = max([15] + [len(_rooms(r[3], st)[0]) for r in _LEGEND])
+    for key, subject, teachers, rooms, label in _LEGEND:
+        name = st.t(key)
         t_plain, t_styled = _teachers(teachers, st)
         r_plain, r_styled = _rooms(rooms, st)
         subj = st.role(label, subject) if label in _TINTED_SUBJECT else st.bold(subject)
-        row = f"{_pad(subj, subject, 5)}  {_pad(t_styled, t_plain, 15)}  {_pad(r_styled, r_plain, 15)}"
+        row = (f"{_pad(subj, subject, 5)}  {_pad(t_styled, t_plain, t_w)}  "
+               f"{_pad(r_styled, r_plain, r_w)}")
         if label in ("cancelled", "removed"):
             row = st.role(label, _plain(row))
         tag = _label_tag(label, st)
-        lines.append(f"  {name:<11} {row}  {tag}".rstrip())
-    lines.append(f"  {'event':<11} " + st.role("event", "★ EVENT") + "  TCH8, TCH9  "
-                 + st.role("event", "event"))
-    lines.append(f"  {'now':<11} " + st.bold(st.yellow("▶")) + " the running lesson, "
-                 + st.dim("dimmed") + " = already over")
-    lines.append(f"  {'absent':<11} " + (st.role("absent", "MATH") if st.enabled else "[MATH]")
-                 + " in --table: a lesson you were absent from")
+        lines.append(f"  {name:<{w}} {row}  {tag}".rstrip())
+    lines.append(f"  {st.t('event'):<{w}} " + st.role("event", "★ EVENT") + "  TCH8, TCH9  "
+                 + st.role("event", st.t("event")))
+    lines.append(f"  {st.t('now'):<{w}} " + st.bold(st.yellow("▶")) + st.t(" the running lesson, ")
+                 + st.dim(st.t("dimmed")) + st.t(" = already over"))
+    lines.append(f"  {st.t('absent'):<{w}} " + (st.role("absent", "MATH") if st.enabled else "[MATH]")
+                 + st.t(" in --table: a lesson you were absent from"))
     return "\n".join(lines)
 
 

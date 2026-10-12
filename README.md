@@ -326,6 +326,7 @@ untis --homework                 # all homework of this school year
 untis -H --days-forward 5        # homework due in the next 5 school days
 untis -t -H                      # both sections
 untis -s --week --only MATH      # only math lessons this week
+untis -s --lang de               # the day view in German (Mo 05.10. … entfällt)
 untis -t -H --except REL,ETH     # tests and homework without REL and ETH
 untis --absences                 # absences of this school year, with totals
 untis -A --days-back 10 --days-forward 0   # absences of the last 10 school days
@@ -402,6 +403,8 @@ $ untis --table --from mon --to tue
 `--holidays` shows the upcoming holidays with a countdown: dates, days until they start and how many school days (Monday to Friday, today included, holidays not counted) are left until then. Holidays that touch (e.g. a single free day right before the autumn break, or a public holiday inside it, also across a weekend) are shown as one break, named after its longest part; a break that is on right now is shown in yellow. `--holidays --next` prints only one sentence about the next break. The data comes with the login (`/app/data`), so it costs no extra request; the date window doesn't apply. It can be combined with `--tests`, `--homework` and `--absences` (then `--next` is the date window of those). `"scrape_holidays": true` in `config.json` adds the holidays to every JSON output.
 
 `--only SUBJ` shows only these subjects, `--except SUBJ` hides them: in the day view, `--oneline`, `--table`, `--tests`, `--homework` and `--json -`. A subject matches by its short or long name (`MATH` or `mathematics`), case-insensitively; several are separated by commas (`--only MATH,ENG`) or given as repeated options. Events have no subject, so `--only` hides them and `--except` keeps them. Absences have no subject and aren't filtered. The JSON files and the cache always keep everything, so a filter never hides data from the next run. Not available with `--start`/`--end`/`--free`, `--now` and `--changes`.
+
+`--lang de` shows the day view, `--oneline`, `--table` and `--legend` in German: weekday names (`Mo`, `Di`, …), status labels (`entfällt`, `ausgetragen`, `kein Lehrer`, `geändert`, `Prüfung`, `Veranstaltung`, `Supplierung`) and the other texts there. `"language": "de"` in `config.json` makes that the default; `"auto"` takes the language of `"locale"` (`de-AT` → German, anything else English). The default stays English (`en`). The other views (`--tests`, `--homework`, `--absences`, `--now`, …) are still English.
 
 `--now` shows the lesson running right now (with the time left) and the next one; after school or on a weekend, the first lesson of the next school day. `--format json` prints the same as data, `--format waybar` the JSON a [Waybar](https://github.com/Alexays/Waybar) custom module expects (`text`, `tooltip`, `class`, where `class` is the lesson's status or `idle`). `--idle-empty` prints nothing between lessons so the module hides. With `--max-age` the bar is fed from the cache instead of hitting WebUntis every minute:
 
