@@ -165,6 +165,22 @@ untis -s --today
 
 </details>
 
+### Shell 补全
+
+`untis --completion bash|zsh|fish` 会输出一个补全脚本，涵盖所有选项（以及 `untis init`），包括 `--color`、`--format`、`--lang`、`--transport` 等的取值，以及 `--config`/`--env` 的文件名：
+
+```bash
+# bash
+mkdir -p ~/.local/share/bash-completion/completions
+untis --completion bash > ~/.local/share/bash-completion/completions/untis
+# zsh（在 ~/.zshrc 中 compinit 之前，~/.zfunc 必须在 fpath 里：fpath+=(~/.zfunc)）
+mkdir -p ~/.zfunc && untis --completion zsh > ~/.zfunc/_untis
+# fish
+untis --completion fish > ~/.config/fish/completions/untis.fish
+```
+
+脚本根据已安装的版本生成：更新之后请重新运行该命令，以获得新的选项。
+
 ## 配置
 
 **`untis init` 是推荐的设置方式**——它会询问你学校的任意一个 WebUntis 网址（登录页面，或新界面

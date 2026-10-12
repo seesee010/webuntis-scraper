@@ -173,6 +173,22 @@ untis -s --today
 
 </details>
 
+### Shell-Vervollständigung
+
+`untis --completion bash|zsh|fish` gibt ein Vervollständigungs-Skript für alle Optionen (und `untis init`) aus, mit den Werten von `--color`, `--format`, `--lang`, `--transport`, … und Dateinamen für `--config`/`--env`:
+
+```bash
+# bash
+mkdir -p ~/.local/share/bash-completion/completions
+untis --completion bash > ~/.local/share/bash-completion/completions/untis
+# zsh (~/.zfunc muss vor compinit in ~/.zshrc im fpath sein: fpath+=(~/.zfunc))
+mkdir -p ~/.zfunc && untis --completion zsh > ~/.zfunc/_untis
+# fish
+untis --completion fish > ~/.config/fish/completions/untis.fish
+```
+
+Das Skript wird aus der installierten Version erzeugt: Nach einem Update den Befehl noch einmal ausführen, damit neue Optionen dazukommen.
+
 ## Konfiguration
 
 **`untis init` ist der empfohlene Weg** — es fragt nach einer beliebigen WebUntis-URL deiner
