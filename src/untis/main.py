@@ -15,7 +15,10 @@ from pathlib import Path
 
 import httpx
 
-from . import __version__, absences, cache, changes, dayinfo, filters, holidays, live, setup_wizard
+from . import (
+    __version__, absences, cache, changes, completion, dayinfo, filters, holidays, live,
+    setup_wizard,
+)
 from . import now as now_mod
 from .browser import BrowserSession
 from .config import (
@@ -62,7 +65,8 @@ WINDOW_DESTS = ("today", "tomorrow", "next", "week", "next_week", "date",
                 "now")
 # These make no sense as defaults (they decide where defaults come from,
 # or print something and exit).
-NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version", "--live")
+NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version", "--live",
+                   "--completion")
 # Options with their own output, which "--json -" replaces: from
 # default_args they are dropped, given explicitly they are an error.
 JSON_STDOUT_CONFLICTS = ("short", "oneline", "table", "legend", "now",
@@ -103,6 +107,11 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
     )
     ap.add_argument(
         "-V", "--version", action="version", version=f"untis {__version__}",
+    )
+    ap.add_argument(
+        "--completion", choices=completion.SHELLS, **dflt(None), metavar="SHELL",
+        help="Print a completion script for bash, zsh or fish and exit, e.g. "
+             "untis --completion zsh > ~/.zfunc/_untis (see the README).",
     )
     ap.add_argument(
         "--config", **dflt(str(DEFAULT_CONFIG_PATH)),
@@ -804,6 +813,9 @@ def main() -> int:
     if sys.argv[1:2] == ["init"]:
         return setup_wizard.run(sys.argv[2:])
     args = _parse_args()
+    if args.completion:
+        print(completion.script(args.completion, _build_parser(), setup_wizard._parser()), end="")
+        return 0
     if args.legend and not _layout(args):
         # Only the legend: no login, no network.
         print(render_legend(resolve_color(args.color), _legend_language(args)))
