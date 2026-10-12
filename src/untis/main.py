@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 
-from . import __version__, absences, cache, changes, dayinfo, holidays, live, setup_wizard
+from . import __version__, absences, cache, changes, dayinfo, filters, holidays, live, setup_wizard
 from . import now as now_mod
 from .browser import BrowserSession
 from .config import (
@@ -261,6 +261,16 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
              "request. Combinable with --tests, --homework and --absences.",
     )
     ap.add_argument(
+        "--only", type=_subjects_arg, action="extend", **dflt(None), metavar="SUBJ",
+        help="Only show these subjects (short or long name, any case, comma-separated, "
+             "e.g. MATH,ENG) in the timetable views, --tests, --homework and '--json -'.",
+    )
+    ap.add_argument(
+        "--except", dest="except_", type=_subjects_arg, action="extend", **dflt(None),
+        metavar="SUBJ",
+        help="Hide these subjects (same format as --only).",
+    )
+    ap.add_argument(
         "--oneline", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print one line per day instead of the day view "
              "(* changed, ~X~ cancelled/removed, ! exam).",
@@ -386,6 +396,9 @@ def _parse_args(
                          or args.oneline or args.table):
         ap.error("--changes can't be combined with questions, --now, --tests, "
                  "--homework, --absences, --holidays, --oneline or --table")
+    if (args.only or args.except_) and (args.query or args.now or args.changes):
+        ap.error("--only/--except can't be combined with --start/--end/--free, --now "
+                 "or --changes")
     if args.notify and not args.changes:
         ap.error("--notify only works with --changes")
     if args.live is not None and args.changes:
@@ -472,6 +485,14 @@ def _day_spec_arg(text: str) -> str:
     return text
 
 
+def _subjects_arg(text: str) -> list[str]:
+    """argparse type for --only/--except: a comma-separated subject list."""
+    try:
+        return filters.parse_subjects(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
 def _date_arg(text: str) -> date:
     try:
         return parse_date(text, date.today())
@@ -523,6 +544,7 @@ async def _async_main(args: argparse.Namespace) -> int:
 
     payload, fetched = await _get_payload(cfg, args, today, now)
     if args.json == "-":
+        payload = filters.filter_payload(payload, args.only, args.except_)
         print(dump_json(payload, pretty=cfg.pretty_json, keep_raw=cfg.include_raw))
         return 0
     if fetched and (cfg.write_json if args.json is None else args.json):
@@ -530,6 +552,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         keep = 0 if args.live is not None else cfg.keep_json
         export(payload, cfg.output_dir, pretty=cfg.pretty_json,
                keep_raw=cfg.include_raw, keep=keep)
+    # The files and the cache keep everything; only the views are filtered.
+    payload = filters.filter_payload(payload, args.only, args.except_)
     color = resolve_color(args.color)
     layout = _layout(args)
     if args.sections:
