@@ -353,6 +353,8 @@ untis -H --days-forward 5        # devoirs à rendre dans les 5 prochains jours 
 untis -t -H                      # les deux sections
 untis -s --week --only MATH      # seulement les cours de maths cette semaine
 untis -s --lang de               # la vue par jour en allemand (Mo 05.10. … entfällt)
+untis -s --long                  # noms complets des matières, professeurs et salles
+untis --who TCH1                 # que signifie un code ?
 untis -t -H --except REL,ETH     # tests et devoirs sans REL ni ETH
 untis --absences                 # absences de cette année scolaire, avec totaux
 untis -A --days-back 10 --days-forward 0   # absences des 10 derniers jours de cours
@@ -432,6 +434,8 @@ $ untis --table --from mon --to tue
 
 `--lang de` affiche la vue par jour, `--oneline`, `--table` et `--legend` en allemand : noms des jours (`Mo`, `Di`, …), statuts (`entfällt`, `ausgetragen`, `kein Lehrer`, `geändert`, `Prüfung`, `Veranstaltung`, `Supplierung`) et les autres textes de ces vues. `"language": "de"` dans `config.json` en fait la valeur par défaut ; `"auto"` prend la langue de `"locale"` (`de-AT` → allemand, tout le reste anglais). Par défaut, c'est l'anglais (`en`). Les autres vues (`--tests`, `--homework`, `--absences`, `--now`, …) restent en anglais.
 
+`--long` affiche les noms complets au lieu des codes courts (`Mathematics` au lieu de `MATH`, la description de la salle au lieu de `R101`), aussi pour les remplacements (`(for …)`), dans la vue par jour, `--oneline`, `--table`, `--tests` et `--homework` ; les fichiers JSON gardent les deux. `--who CODE` indique ce que signifie un code, par ex. `TCH1   teacher   Fullname` ou `R101   room   Classroom, building T`. Il cherche d'abord dans les données en cache (sans réseau), sinon dans les listes de salles et de classes de l'école (avec les professeurs principaux) et dans l'emploi du temps de la semaine ; avec `--offline`, seulement dans le cache. Un nom complet fonctionne aussi (`--who mathematics`), et à partir de 3 lettres une partie du nom. Code de sortie `6` si rien ne correspond.
+
 `--now` affiche le cours en cours (avec le temps restant) et le suivant ; après les cours ou le week-end, le premier cours du prochain jour de cours. `--format json` affiche la même chose sous forme de données, `--format waybar` le JSON attendu par un module personnalisé [Waybar](https://github.com/Alexays/Waybar) (`text`, `tooltip`, `class`, où `class` est le statut du cours ou `idle`). `--idle-empty` n'affiche rien entre les cours pour que le module se masque. Avec `--max-age`, la barre est alimentée par le cache au lieu d'interroger WebUntis chaque minute :
 
 ```jsonc
@@ -473,6 +477,7 @@ ajoute `-v` pour voir la trace complète.
 | `3` | échec de la connexion |
 | `4` | WebUntis injoignable ou a renvoyé une erreur |
 | `5` | `--start` / `--end` / `--free` : pas de cours ce jour-là (affiche `-`) |
+| `6` | `--who` : aucune matière, aucun professeur, aucune salle ni classe avec ce code |
 | `10` | `--changes` : quelque chose a changé depuis la dernière exécution |
 | `130` | interrompu avec Ctrl-C |
 

@@ -337,6 +337,8 @@ untis -H --days-forward 5        # 接下来 5 个上课日内到期的作业
 untis -t -H                      # 两个部分都显示
 untis -s --week --only MATH      # 本周只显示数学课
 untis -s --lang de               # 用德语显示按天视图（Mo 05.10. … entfällt）
+untis -s --long                  # 显示科目、老师和教室的全称
+untis --who TCH1                 # 这个代码是什么意思？
 untis -t -H --except REL,ETH     # 不含 REL 和 ETH 的测验与作业
 untis --absences                 # 本学年的缺勤记录，带汇总
 untis -A --days-back 10 --days-forward 0   # 最近 10 个上课日的缺勤记录
@@ -414,6 +416,8 @@ $ untis --table --from mon --to tue
 
 `--lang de` 用德语显示按天视图、`--oneline`、`--table` 和 `--legend`：星期名称（`Mo`、`Di` 等）、状态标签（`entfällt`、`ausgetragen`、`kein Lehrer`、`geändert`、`Prüfung`、`Veranstaltung`、`Supplierung`）以及这些视图中的其他文字。在 `config.json` 中设置 `"language": "de"` 可将其设为默认；`"auto"` 会采用 `"locale"` 的语言（`de-AT` → 德语，其他都为英语）。默认仍是英语（`en`）。其他视图（`--tests`、`--homework`、`--absences`、`--now` 等）仍为英语。
 
+`--long` 显示全称而不是简称（例如 `Mathematics` 而不是 `MATH`，教室的描述而不是 `R101`），代课老师（`(for …)`）也一样，适用于按天视图、`--oneline`、`--table`、`--tests` 和 `--homework`；JSON 文件会同时保留两者。`--who 代码` 告诉你一个代码代表什么，例如 `TCH1   teacher   Fullname` 或 `R101   room   Classroom, building T`。它先在缓存数据中查找（不联网），找不到时再查学校的教室和班级列表（包括班主任）以及本周的课表；使用 `--offline` 时只查缓存。也可以输入全称（`--who mathematics`），从 3 个字母起也可以输入全称的一部分。如果没有匹配，退出码为 `6`。
+
 `--now` 显示正在上的课（及剩余时间）和下一节课；放学后或周末则显示下一个上课日的第一节课。`--format json` 以数据形式输出同样的内容，`--format waybar` 输出 [Waybar](https://github.com/Alexays/Waybar) 自定义模块所需的 JSON（`text`、`tooltip`、`class`，其中 `class` 是该节课的状态或 `idle`）。`--idle-empty` 在课间不输出任何内容，这样模块会自动隐藏。配合 `--max-age`，状态栏会使用缓存数据，而不是每分钟都请求 WebUntis：
 
 ```jsonc
@@ -453,6 +457,7 @@ systemctl --user enable --now untis-changes.timer
 | `3` | 登录失败 |
 | `4` | 无法连接 WebUntis，或 WebUntis 返回了错误 |
 | `5` | `--start` / `--end` / `--free`：那天没有课（输出 `-`） |
+| `6` | `--who`：没有该代码对应的科目、老师、教室或班级 |
 | `10` | `--changes`：自上次运行以来有变化 |
 | `130` | 用 Ctrl-C 中止 |
 

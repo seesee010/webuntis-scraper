@@ -345,6 +345,8 @@ untis -H --days-forward 5        # homework due in the next 5 school days
 untis -t -H                      # both sections
 untis -s --week --only MATH      # only math lessons this week
 untis -s --lang de               # the day view in German (Mo 05.10. … entfällt)
+untis -s --long                  # full subject, teacher and room names
+untis --who TCH1                 # what does a code stand for?
 untis -t -H --except REL,ETH     # tests and homework without REL and ETH
 untis --absences                 # absences of this school year, with totals
 untis -A --days-back 10 --days-forward 0   # absences of the last 10 school days
@@ -424,6 +426,8 @@ $ untis --table --from mon --to tue
 
 `--lang de` shows the day view, `--oneline`, `--table` and `--legend` in German: weekday names (`Mo`, `Di`, …), status labels (`entfällt`, `ausgetragen`, `kein Lehrer`, `geändert`, `Prüfung`, `Veranstaltung`, `Supplierung`) and the other texts there. `"language": "de"` in `config.json` makes that the default; `"auto"` takes the language of `"locale"` (`de-AT` → German, anything else English). The default stays English (`en`). The other views (`--tests`, `--homework`, `--absences`, `--now`, …) are still English.
 
+`--long` shows full names instead of the short codes (`Mathematics` instead of `MATH`, the room's description instead of `R101`), also for substitutes (`(for …)`), in the day view, `--oneline`, `--table`, `--tests` and `--homework`; the JSON files keep both. `--who CODE` says what a code stands for, e.g. `TCH1   teacher   Fullname`, or `R101   room   Classroom, building T`. It looks in the cached data first (no network) and otherwise in the school's room and class lists (with the class teachers) and this week's timetable; with `--offline` only in the cache. A full name works too (`--who mathematics`), and from 3 letters also a part of one. Exit code `6` if nothing matches.
+
 `--now` shows the lesson running right now (with the time left) and the next one; after school or on a weekend, the first lesson of the next school day. `--format json` prints the same as data, `--format waybar` the JSON a [Waybar](https://github.com/Alexays/Waybar) custom module expects (`text`, `tooltip`, `class`, where `class` is the lesson's status or `idle`). `--idle-empty` prints nothing between lessons so the module hides. With `--max-age` the bar is fed from the cache instead of hitting WebUntis every minute:
 
 ```jsonc
@@ -465,6 +469,7 @@ add `-v` for the full traceback.
 | `3` | login failed |
 | `4` | WebUntis unreachable or returned an error |
 | `5` | `--start` / `--end` / `--free`: no school that day (prints `-`) |
+| `6` | `--who`: no subject, teacher, room or class with that code |
 | `10` | `--changes`: something changed since the last run |
 | `130` | aborted with Ctrl-C |
 

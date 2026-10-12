@@ -16,7 +16,7 @@ from pathlib import Path
 import httpx
 
 from . import (
-    __version__, absences, cache, changes, completion, dayinfo, filters, holidays, live,
+    __version__, absences, cache, changes, completion, dayinfo, filters, holidays, live, names,
     setup_wizard,
 )
 from . import now as now_mod
@@ -41,6 +41,7 @@ EXIT_CONFIG = 2     # missing/invalid config or setup (e.g. no Chromium)
 EXIT_LOGIN = 3      # could not log in
 EXIT_NETWORK = 4    # WebUntis unreachable or returned an error
 EXIT_NO_SCHOOL = 5  # --start/--end/--free: no lessons that day
+EXIT_NOT_FOUND = 6  # --who: no such code
 EXIT_CHANGES = 10   # --changes: something changed since the last run
 EXIT_ABORTED = 130  # Ctrl-C
 
@@ -66,7 +67,7 @@ WINDOW_DESTS = ("today", "tomorrow", "next", "week", "next_week", "date",
 # These make no sense as defaults (they decide where defaults come from,
 # or print something and exit).
 NOT_IN_DEFAULTS = ("--config", "--env", "-h", "--help", "-V", "--version", "--live",
-                   "--completion")
+                   "--completion", "--who")
 # Options with their own output, which "--json -" replaces: from
 # default_args they are dropped, given explicitly they are an error.
 JSON_STDOUT_CONFLICTS = ("short", "oneline", "table", "legend", "now",
@@ -98,6 +99,7 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         epilog=f"exit codes: {EXIT_ERROR} unexpected error, {EXIT_CONFIG} config/setup, "
                f"{EXIT_LOGIN} login failed, {EXIT_NETWORK} network/WebUntis error, "
                f"{EXIT_NO_SCHOOL} no school that day (--start/--end/--free), "
+               f"{EXIT_NOT_FOUND} unknown code (--who), "
                f"{EXIT_CHANGES} changes found (--changes), "
                f"{EXIT_ABORTED} aborted. Default arguments can be set as "
                f"\"default_args\" in config.json (e.g. [\"--short\"]) or in "
@@ -281,6 +283,16 @@ def _build_parser(cls: type = argparse.ArgumentParser, suppress: bool = False):
         help="Hide these subjects (same format as --only).",
     )
     ap.add_argument(
+        "--long", action=argparse.BooleanOptionalAction, **dflt(False),
+        help="Show full subject, teacher and room names instead of the short codes "
+             "(day view, --oneline, --table, --tests, --homework).",
+    )
+    ap.add_argument(
+        "--who", metavar="CODE", **dflt(None),
+        help="Look up what a short code (or a name) stands for: subject, teacher, room "
+             "or class, from the cached data or the school's room/class lists.",
+    )
+    ap.add_argument(
         "--oneline", action=argparse.BooleanOptionalAction, **dflt(False),
         help="Print one line per day instead of the day view "
              "(* changed, ~X~ cancelled/removed, ! exam).",
@@ -411,6 +423,13 @@ def _parse_args(
                          or args.oneline or args.table):
         ap.error("--changes can't be combined with questions, --now, --tests, "
                  "--homework, --absences, --holidays, --oneline or --table")
+    if args.who is not None and (_layout(args) or args.query or args.now or args.changes
+                                 or args.sections or args.json == "-"
+                                 or args.live is not None or args.legend):
+        ap.error("--who can't be combined with views, questions, --now, --changes, "
+                 "--live, --legend or '--json -'")
+    if args.long and (args.query or args.now or args.changes):
+        ap.error("--long can't be combined with --start/--end/--free, --now or --changes")
     if (args.only or args.except_) and (args.query or args.now or args.changes):
         ap.error("--only/--except can't be combined with --start/--end/--free, --now "
                  "or --changes")
@@ -548,6 +567,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         cfg.keep_json = parse_keep(args.keep)
     today, now = date.today(), datetime.now()
     _apply_date_shortcuts(cfg, args, today)
+    if args.who is not None:
+        return await _answer_who(cfg, args)
     if args.query:
         return await _answer_question(cfg, args, today, now)
     if args.now:
@@ -569,6 +590,8 @@ async def _async_main(args: argparse.Namespace) -> int:
                keep_raw=cfg.include_raw, keep=keep)
     # The files and the cache keep everything; only the views are filtered.
     payload = filters.filter_payload(payload, args.only, args.except_)
+    if args.long:
+        payload = names.use_long_names(payload)
     color = resolve_color(args.color)
     layout = _layout(args)
     if args.sections:
@@ -625,6 +648,53 @@ async def _get_payload(cfg, args: argparse.Namespace, today: date, now: datetime
     payload = await _fetch(cfg, args)
     cache.save(CACHE_PATH, payload, cfg, datetime.now())
     return payload, True
+
+
+async def _answer_who(cfg, args: argparse.Namespace) -> int:
+    """--who CODE: what a code stands for. The cached data first (no
+    network); otherwise the school's room and class lists and this
+    week's timetable (not with --offline)."""
+    known: names.Names = {}
+    entry = cache.load(CACHE_PATH)
+    if entry and entry.get("account") == cache.account_key(cfg):
+        known = names.collect_names(entry.get("payload") or {})
+    matches = names.lookup(known, args.who)
+    if not matches and not args.offline:
+        known.update(await _fetch_names(cfg, args))
+        matches = names.lookup(known, args.who)
+    if not matches:
+        where = "the cached data" if args.offline else "the timetable or the room/class lists"
+        print(f"untis: no subject, teacher, room or class {args.who!r} in {where}",
+              file=sys.stderr)
+        return EXIT_NOT_FOUND
+    print(names.format_who(matches))
+    return 0
+
+
+async def _fetch_names(cfg, args: argparse.Namespace) -> names.Names:
+    """Codes from /timetable/filter (rooms, classes, and subjects/teachers
+    where allowed) and from this week's timetable."""
+    found: names.Names = {}
+    log = logging.getLogger(__name__)
+    async with BrowserSession(cfg, fresh=args.clear_session) as session:
+        client = WebUntisClient(cfg, session)
+        try:
+            await client.login(force=args.form_login)
+            for kind in ("ROOM", "CLASS", "SUBJECT", "TEACHER"):
+                try:
+                    found.update(names.names_from_filter(await client.get_filter(kind)))
+                except WebUntisError as exc:
+                    log.debug("--who: no %s list: %s", kind, exc)
+            cfg.start_date, cfg.end_date = week_range(date.today())
+            cfg.scrape_exams = cfg.scrape_homework = cfg.scrape_absences = False
+            cfg.scrape_messages = cfg.scrape_holidays = False
+            payload = await Scraper(cfg, client).run()
+            for (kind, short), long in names.collect_names(payload).items():
+                if long or (kind, short) not in found:
+                    found[(kind, short)] = long
+        finally:
+            await client.close()
+    return found
 
 
 async def _answer_question(cfg, args: argparse.Namespace, today: date, now: datetime) -> int:
@@ -822,6 +892,7 @@ def main() -> int:
         return 0
     _setup_logging(args.verbose,
                    quiet=bool(_layout(args) or args.query or args.sections or args.now
+                              or args.who is not None
                               or args.changes or args.live is not None or args.json == "-"))
     if args.default_args:
         logging.getLogger(__name__).debug(

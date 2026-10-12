@@ -99,6 +99,18 @@ class TestNormalizeGrid:
         assert e["teachers"][1]["status"] == "REMOVED"
         assert e["is_substitution"] is True
 
+    def test_replaced_element_keeps_its_long_name(self):
+        grid = {"days": [{"date": "2026-06-02", "gridEntries": [{
+            "status": "CHANGED",
+            "position1": [{"current": {"shortName": "NEW", "longName": "Newman",
+                                       "type": "TEACHER", "status": "ADDED"},
+                           "removed": {"shortName": "OLD", "longName": "Oldman",
+                                       "type": "TEACHER"}}],
+        }]}]}
+        e = normalize_timetable_grid(grid)["days"][0]["entries"][0]
+        assert e["teachers"][0] == {"short": "NEW", "long": "Newman", "status": "ADDED",
+                                    "replaces": "OLD", "replaces_long": "Oldman"}
+
     def test_skips_empty_days(self):
         out = normalize_timetable_grid({"days": []})
         assert out["days"] == []

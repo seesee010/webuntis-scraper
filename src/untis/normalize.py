@@ -241,6 +241,8 @@ def _collect_elements(entry: dict) -> dict[str, list[dict]]:
                 item["status"] = cur.get("status")
             if removed and cur is not removed:
                 item["replaces"] = removed.get("shortName")
+                if removed.get("longName"):
+                    item["replaces_long"] = removed["longName"]
             out[key].append(item)
         i += 1
     return out
