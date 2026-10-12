@@ -317,6 +317,8 @@ untis -t --days-back 30 --days-forward 0   # 最近 30 个上课日的考试（�
 untis --homework                 # 本学年的所有作业
 untis -H --days-forward 5        # 接下来 5 个上课日内到期的作业
 untis -t -H                      # 两个部分都显示
+untis -s --week --only MATH      # 本周只显示数学课
+untis -t -H --except REL,ETH     # 不含 REL 和 ETH 的测验与作业
 untis --absences                 # 本学年的缺勤记录，带汇总
 untis -A --days-back 10 --days-forward 0   # 最近 10 个上课日的缺勤记录
 untis --holidays                 # 即将到来的假期：日期、距开始的天数和上课日数
@@ -388,6 +390,8 @@ $ untis --table --from mon --to tue
 `--absences`（也可以用 `-A`）只显示缺勤记录，最早的在前，标题行显示汇总：天数、缺课节数以及有多少条未获准假。每条缺勤记录显示时间、涉及的课节数、是否已准假（或学校自己的请假状态）、原因，以及缩进显示的说明和请假备注；未准假的显示为红色。课节数按学校的作息时间表计算：与缺勤时间有重叠的每一节课都算。跨多天的缺勤只计算其中的工作日（中间的假期无法得知，也会计算在内）。不指定时间范围时包含整个学年；使用 `--days-back`、`--from` 等时只包含该范围。可以与 `--tests` 和 `--homework` 组合使用。
 
 `--holidays` 显示即将到来的假期并带倒计时：日期、距离开始的天数，以及在那之前还剩多少个上课日（周一到周五，包括今天，不计假期）。相互衔接的假期（例如秋假前单独的一天休息日，或假期中间的法定节日，跨周末也算）会合并为一个假期显示，以其中最长的部分命名；正在进行的假期显示为黄色。`--holidays --next` 只输出一句关于下一个假期的话。数据随登录一起获取（`/app/data`），因此不需要额外请求；时间范围对它不适用。可以与 `--tests`、`--homework` 和 `--absences` 组合使用（此时 `--next` 是它们的时间范围）。在 `config.json` 中设置 `"scrape_holidays": true` 会把假期加入每次的 JSON 输出。
+
+`--only 科目` 只显示这些科目，`--except 科目` 则隐藏它们：适用于按天视图、`--oneline`、`--table`、`--tests`、`--homework` 和 `--json -`。科目按简称或全称匹配（`MATH` 或 `mathematics`），不区分大小写；多个科目用逗号分隔（`--only MATH,ENG`），也可以重复使用该选项。活动没有科目：`--only` 会隐藏它们，`--except` 会保留。缺勤记录没有科目，不会被过滤。JSON 文件和缓存始终保留全部数据，因此过滤不会对下一次运行隐藏任何数据。不能与 `--start`/`--end`/`--free`、`--now` 和 `--changes` 一起使用。
 
 `--now` 显示正在上的课（及剩余时间）和下一节课；放学后或周末则显示下一个上课日的第一节课。`--format json` 以数据形式输出同样的内容，`--format waybar` 输出 [Waybar](https://github.com/Alexays/Waybar) 自定义模块所需的 JSON（`text`、`tooltip`、`class`，其中 `class` 是该节课的状态或 `idle`）。`--idle-empty` 在课间不输出任何内容，这样模块会自动隐藏。配合 `--max-age`，状态栏会使用缓存数据，而不是每分钟都请求 WebUntis：
 

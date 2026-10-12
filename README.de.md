@@ -330,6 +330,8 @@ untis -t --days-back 30 --days-forward 0   # Tests der letzten 30 Schultage (mit
 untis --homework                 # alle Hausaufgaben dieses Schuljahrs
 untis -H --days-forward 5        # Hausaufgaben, die in den nächsten 5 Schultagen fällig sind
 untis -t -H                      # beide Abschnitte
+untis -s --week --only MATH      # nur Mathe-Stunden diese Woche
+untis -t -H --except REL,ETH     # Tests und Hausübungen ohne REL und ETH
 untis --absences                 # Abwesenheiten dieses Schuljahrs, mit Summen
 untis -A --days-back 10 --days-forward 0   # Abwesenheiten der letzten 10 Schultage
 untis --holidays                 # kommende Ferien: Datum, Tage und Schultage bis dahin
@@ -403,6 +405,8 @@ $ untis --table --from mon --to tue
 `--absences` (auch `-A`) zeigt nur Abwesenheiten, älteste zuerst, mit Summen in der Kopfzeile: Tage, versäumte Stunden und wie viele nicht entschuldigt sind. Jede Abwesenheit zeigt ihre Zeit, die betroffenen Stunden, ob sie entschuldigt ist (oder den Entschuldigungsstatus der Schule), den Grund sowie Text und Entschuldigungsnotiz eingerückt darunter; nicht entschuldigte sind rot. Stunden werden mit dem Stundenraster der Schule gezählt: Jede Einheit, die die Abwesenheit überschneidet, zählt. Eine Abwesenheit über mehrere Tage zählt ihre Wochentage (Ferien dazwischen sind nicht bekannt und zählen mit). Ohne Zeitraum umfasst es das ganze Schuljahr; mit `--days-back`, `--from`, … nur diesen Zeitraum. Kombinierbar mit `--tests` und `--homework`.
 
 `--holidays` zeigt die kommenden Ferien mit Countdown: Datum, Tage bis zum Beginn und wie viele Schultage (Montag bis Freitag, heute mitgezählt, Ferientage nicht) bis dahin noch übrig sind. Ferien, die aneinander grenzen (z. B. ein einzelner freier Tag direkt vor den Herbstferien oder ein Feiertag mitten darin, auch über ein Wochenende hinweg), werden als ein Block gezeigt, benannt nach dem längsten Teil; laufende Ferien sind gelb. `--holidays --next` gibt nur einen Satz über die nächsten Ferien aus. Die Daten kommen mit dem Login (`/app/data`), es gibt also keine zusätzliche Anfrage; der Zeitraum gilt hier nicht. Kombinierbar mit `--tests`, `--homework` und `--absences` (dann ist `--next` deren Zeitraum). `"scrape_holidays": true` in `config.json` nimmt die Ferien in jede JSON-Ausgabe auf.
+
+`--only FACH` zeigt nur diese Fächer, `--except FACH` blendet sie aus: in der Tagesansicht, `--oneline`, `--table`, `--tests`, `--homework` und `--json -`. Ein Fach passt über seinen Kurz- oder Langnamen (`MATH` oder `mathematics`), ohne auf Groß-/Kleinschreibung zu achten; mehrere werden mit Kommas getrennt (`--only MATH,ENG`) oder als wiederholte Optionen angegeben. Veranstaltungen haben kein Fach: `--only` blendet sie aus, `--except` behält sie. Abwesenheiten haben kein Fach und werden nicht gefiltert. Die JSON-Dateien und der Cache behalten immer alles, ein Filter versteckt also nie Daten vor dem nächsten Lauf. Nicht verfügbar mit `--start`/`--end`/`--free`, `--now` und `--changes`.
 
 `--now` zeigt die gerade laufende Stunde (mit Restzeit) und die nächste; nach Schulschluss oder am Wochenende die erste Stunde des nächsten Schultags. `--format json` gibt dasselbe als Daten aus, `--format waybar` das JSON, das ein [Waybar](https://github.com/Alexays/Waybar)-Custom-Modul erwartet (`text`, `tooltip`, `class`, wobei `class` der Status der Stunde oder `idle` ist). `--idle-empty` gibt zwischen den Stunden nichts aus, damit sich das Modul ausblendet. Mit `--max-age` wird die Leiste aus dem Cache gefüttert, statt WebUntis jede Minute abzufragen:
 
